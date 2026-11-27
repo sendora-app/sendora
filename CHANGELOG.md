@@ -4,8 +4,8 @@
 
 0.3.0 turns Sendora into **one codebase with three flavours** from one binary and one image
 (`ghcr.io/sendora-app/sendora:0.3.0`): Community single-tenant, Community multi-tenant and Cluster
-(several web and controller replicas on Kubernetes with PostgreSQL on CloudNativePG; preview). Every
-stored value of a tenant is now encrypted per row under keys the tenant can rotate. Entries are tagged
+(several web and controller replicas on Kubernetes with PostgreSQL on CloudNativePG; preview). A tenant's
+personal data and share details are now encrypted per row under keys the tenant can rotate. Entries are tagged
 `[all]`, `[community]` or `[cluster]`.
 
 ### Upgrading from 0.2

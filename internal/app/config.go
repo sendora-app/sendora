@@ -56,7 +56,7 @@ func JWTSecretFromEnv() (string, error) {
 var k8sServiceLinkRe = regexp.MustCompile(`^SENDORA(_WEB|_CONTROLLER)?_(SERVICE_(HOST|PORT)(_[A-Z0-9_]+)?|PORT(_\d+_(TCP|UDP|SCTP)(_(PROTO|PORT|ADDR))?)?)$`)
 
 var serverEnvNames = map[string]bool{
-	"SENDORA_DB_KEY_FILE": true, "SENDORA_KEY_OPS_PER_HOUR": true, "SENDORA_DB_INITIALIZE": true, "SENDORA_TRUSTED_PROXIES": true,
+	"SENDORA_DB_KEY_FILE": true, "SENDORA_KEY_OPS_PER_HOUR": true, "SENDORA_KEY_JOB_CONCURRENCY": true, "SENDORA_SOURCE_URL": true, "SENDORA_DB_INITIALIZE": true, "SENDORA_TRUSTED_PROXIES": true,
 	"SENDORA_SETUP_CODE": true, "SENDORA_FORCE_LOCAL_LOGIN": true, "SENDORA_DISABLE_IP_BANS": true,
 	"SENDORA_VERIFIED_DOWNLOAD_MAX_BYTES": true, "SENDORA_DISABLE_ADMIN_IP_ALLOWLIST": true,
 	forwardTokenEnv: true, metricsTokenEnv: true,

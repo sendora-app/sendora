@@ -1,29 +1,29 @@
 # Audit events
 
-This catalogue lists every audit action the Sendora server writes, so that an auditor can judge coverage and a SIEM engineer can build rules. It was compiled from the code (every `logEvent`, `logShare`, `critical`/`auditCritical`, `auditAccessDenied` and `auditDecryptFailed` call in `internal/app`, plus the generic rules in `auditMiddleware`/`auditOutcome` and `classifyAction` in `internal/app/audit.go`). The chain itself is implemented in `internal/store/audit.go`.
+This catalogue lists every audit action the Sendora server writes, so that an auditor can judge coverage and a SIEM engineer can build rules. It was compiled from the code (every `logEvent`, `logShare`, `critical`/`auditCritical`, `auditAccessDenied` and `auditDecryptFailed` call in `internal/app`, plus the generic rules in `auditMiddleware`/`auditOutcome` and `classifyAction` in `internal/app/audit.go`, and every `platform.Audit` call for the platform log). The chain itself is implemented in `internal/store/audit.go`.
 
-Written for version 0.2.0 (the `storage_*`, `backup_remote_*`, multi-tenant and platform events came with 0.2.0). The Cluster flavour of 0.3 is not covered yet ([cluster/QUICKSTART.md](../cluster/QUICKSTART.md), [ENCRYPTION.md](../ENCRYPTION.md)).
+Applies to version 0.3.0, all three flavours. The tenant audit log is the same in every flavour; the platform audit log (section 4.7) exists in the multi-tenant and Cluster flavours. Key management events are in section 4.8; keys themselves are described in [ENCRYPTION.md](../ENCRYPTION.md).
 
 [Back to the compliance index](README.md) · wiki: [Audit log](https://github.com/sendora-app/sendora/wiki/Audit-Log)
 
 ## 1. Record structure
 
-Every record has these fields (table `audit_log`; same names in the JSON Lines export and in forwarded records):
+Every record has these fields (table `audit_log`; same names in the JSON Lines export and in forwarded records). The export, the API and forwarded records carry the plaintext values; in the database `actor_name`, `target` and `detail` are encrypted (see 1.3):
 
 | Field | Content |
 |---|---|
 | `seq` | Monotonic sequence number |
 | `ts` | UTC timestamp, microseconds (`2006-01-02T15:04:05.000000Z`) |
-| `category` | `auth`, `account`, `admin`, `security`, `share` or `system` |
+| `category` | `auth`, `account`, `admin`, `security`, `share` or `system`; in the platform log also `platform` |
 | `actor_id` | User ID; `0` for system, anonymous and public actors |
 | `actor_name` | Username at the time of the event (max. 100 characters), or `system`, `public`, `unknown` or empty |
-| `actor_role` | `admin`, `auditor`, `user`, `guest`, `system` or `anonymous` |
+| `actor_role` | `admin`, `auditor`, `user`, `guest`, `system` or `anonymous`; `platform_admin` for platform actions (in the tenant log and the platform log) |
 | `action` | Action name (tables below), or `METHOD /route/pattern` for generic records |
 | `target` | Object label (max. 160 characters), see 1.1 |
 | `outcome` | `ok`, `denied`, `failed` or `attempted` |
 | `detail` | Short free text (max. 2,000 bytes). Never passwords, tokens, secrets, secret setting values, share names, link IDs, file names or file contents |
 | `ip` | Client address. Stored **only** while the setting `audit_log_ip` is on (default off). Empty otherwise |
-| `prev_hash`, `hash` | Chain: `hash = HMAC-SHA256(audit key, canonical record incl. seq and prev_hash)`. The audit key is derived from the database key with HKDF |
+| `prev_hash`, `hash` | Chain: `hash = HMAC-SHA256(audit-mac key, canonical record incl. seq and prev_hash)`, computed over the plaintext values. See 1.3 |
 
 ### 1.1 Target formats
 
@@ -36,7 +36,9 @@ Every record has these fields (table `audit_log`; same names in the JSON Lines e
 | `invite#<id>` | Reverse-share invitations |
 | `provider#<id>`, `provider` | Sign-in providers |
 | `backup`, `<backup file name>` | Backups |
-| `storage` | Object storage settings, connection tests and migrations (0.2.0) |
+| `storage` | Object storage settings, connection tests and migrations |
+| `keys`, `keys:<purpose>` | Tenant key rotation and retirement (section 4.8) |
+| `kek` | The tenant-managed key (Cluster, section 4.8) |
 | `settings`, `audit_log`, `access_review` | Fixed labels |
 | `lang:<code>` | Interface translations |
 | `<route pattern>` or `METHOD <path>` | `access_denied` records |
@@ -46,6 +48,14 @@ Every record has these fields (table `audit_log`; same names in the JSON Lines e
 
 - Outcome: an action ending in `_failed` (and `backup_failed_auto`) is `failed`; `login_lockout`, `access_denied` and any action ending in `_denied` are `denied`; everything else is `ok`. The critical-action rule (section 3) adds `attempted`.
 - Category: an explicit list maps actions to `auth`, `security`, `system` and `account` (see the tables). Of the rest, actions starting with `share`, `download_` or `invite_` are `share`, actions starting with `user_` are `account`, and everything else is `admin`.
+
+### 1.3 Chain key and encrypted fields
+
+- **Chain key.** Every database (each tenant's and the platform database) has its own random `audit-mac` key in its keyring, wrapped under the database's KEK ([ENCRYPTION.md](../ENCRYPTION.md#3-key-hierarchy)). The chain and the retention checkpoints are HMAC-SHA256 under that key. It stays at version 1 for the life of the database: a rotation is refused (`sendora-db rotate-key` and the API do not accept the purpose `audit-mac`). For a tenant-managed tenant (Cluster) the key is wrapped only under the tenant's own KEK, so the platform operator cannot forge the tenant's chain.
+- **Encrypted fields.** `actor_name`, `target` and `detail` are sealed per value (AES-256-GCM, bound to table, column and row) under the tenant's `audit-enc` key, not under the `data` key. A record keeps the `audit-enc` version it was written under; rotating `audit-enc` only changes the key for new records, and records are never re-sealed (the tamper guard forbids updates). `seq`, `ts`, `category`, `actor_id`, `actor_role`, `action`, `outcome`, `ip` and the hashes are not column-encrypted (in the SQLite flavours the whole database is still SQLCipher-encrypted).
+- **Verification** opens the encrypted fields and recomputes the chain over the plaintext; a record whose fields cannot be opened does not verify.
+- **Upgraded databases.** A chain written by 0.2 was keyed with a key derived from the database key; after `sendora-db upgrade-encryption` it does not verify under the new `audit-mac` key and is reported as broken from its first record. The records themselves are kept ([CHOOSING-A-FLAVOUR.md](../CHOOSING-A-FLAVOUR.md#upgrading-from-02-to-03)).
+- **Re-keying copies** (tenant import, restoring a backup from another installation) carry the `audit-mac` and `audit-enc` keys over, so the chain stays verifiable.
 
 ## 2. Generic rules (written by the middleware)
 
@@ -107,6 +117,14 @@ The outcome is then either the handler's own record (normally with the same acti
 | `backup_deleted` | `DELETE /api/backups/{name}` | S | admin | `backup#<name>` | handler |
 | `db_import_prepared` | `POST /api/backups/import` | | admin | `backup` | handler |
 | `db_import_applied` | `POST /api/backups/import/apply` | S (and the administrator's local password) | admin | `backup` | handler |
+| `multitenant_conversion_requested` | `POST /api/multitenant` | S | admin | `platform` | handler writes `multitenant_conversion_scheduled` (see 4.6) |
+| `multitenant_conversion_cancel_requested` | `DELETE /api/multitenant` | S | admin | `platform` | handler writes `multitenant_conversion_cancelled` |
+| `key_rotation_requested` | `POST /api/admin/keys/rotate` | S | security | `keys` | middleware (`status=`); the job is then recorded by the system (4.8) |
+| `key_retire_requested` | `POST /api/admin/keys/retire` | S | security | `keys` | middleware (`status=`); then 4.8 |
+| `files_reencrypt_requested` | `POST /api/admin/keys/reencrypt-files` | S | security | `keys` | middleware (`status=`); then 4.8 |
+| `kek_upload_requested` | `POST /api/admin/kek/upload` (Cluster) | S | security | `kek` | handler writes `kek_step` records and `kek_switched` or `kek_switch_failed` (4.8) |
+| `kek_replace_requested` | `POST /api/admin/kek/replace` (Cluster) | S | security | `kek` | handler: `kek_replaced` or `kek_replace_failed` |
+| `kek_release_requested` | `POST /api/admin/kek/release` (Cluster) | S | security | `kek` | handler: `kek_released` or `kek_release_failed` |
 
 ## 4. Catalogue of explicit actions
 
@@ -241,11 +259,19 @@ Other administrator mutations (branding, backgrounds, themes, email templates an
 `mode=exec|exit`) record the conversion scheduled in Admin → Multi-tenant; the
 conversion itself is `multitenant_conversion_completed` in the platform audit log.
 
-### 4.7 Platform audit log (multi-tenant mode)
+### 4.7 Platform audit log (multi-tenant and Cluster flavours)
 
-The platform console writes to its own tamper-evident log (`platform.db`, same
-record format and verification). Actions that affect a tenant are also written
-to that tenant's log with the role `platform_admin` (marked *both* below).
+The platform console writes to its own tamper-evident log in the platform
+database (`platform.db` in the multi-tenant flavour, the PostgreSQL database
+`sendora_platform` in the Cluster flavour), with the same record format,
+encryption and verification, keyed with the platform database's own
+`audit-mac` key. Actions that affect a tenant are also written to that
+tenant's log with the role `platform_admin` (marked *both* below). The
+category of a platform record is `auth` for sign-in actions, `system` for
+`system_*` and `platform` otherwise; records written by a background process
+have the role `system`. Most outcomes are `ok`, `failed` or `denied`; the key
+requests of section 4.8 also use `refused` and the per-tenant results listed
+there.
 
 | Action | When | Actor | Target | Detail |
 |---|---|---|---|---|
@@ -257,7 +283,7 @@ to that tenant's log with the role `platform_admin` (marked *both* below).
 | `tenant_storage_changed` (both) | The platform's storage decision for a tenant changed (offer, own storage allowed) | platform administrator | `tenant <slug> (<id>)` | `offer <old> -> <new>; own storage allowed <old> -> <new>` |
 | `tenant_network_policy_changed` (both) | Private network targets allowed or refused for a tenant (after a fresh confirmation) | platform administrator | `tenant <slug> (<id>)` | `allow_private_targets <old> -> <new>` |
 | `platform_setup` | First platform administrator created with the setup code | the new administrator | `admin <name>` | `first platform administrator created` |
-| `login_ok`, `login_failed`, `mfa_failed`, `mfa_enrolled`, `logout`, `stepup_failed` | Console sign-in, second step, enrolment, sign-out and failed confirmations | platform administrator (or `anonymous` for an unknown username) | `admin <name>` | `unknown username`, `wrong password` or the method |
+| `login_ok`, `login_password_ok`, `login_failed`, `login_lockout`, `mfa_failed`, `mfa_enrolled`, `logout`, `stepup_failed` | Console sign-in (`login_password_ok`: password correct, second step still to come; `login_ok`: fully signed in), lockout, second step, enrolment, sign-out and failed confirmations | platform administrator (or `anonymous` for an unknown username) | `admin <name>` | `stage=<stage>`, `unknown username`, `wrong password` or the method |
 | `platform_admin_created`, `platform_admin_deleted`, `platform_admin_mfa_reset` | Another administrator added, removed or their authenticator reset (fresh confirmation) | platform administrator | `admin <name>` | empty |
 | `platform_settings_changed` | Platform settings saved | platform administrator | `settings` | `keys=<changed keys>` |
 | `platform_base_domain_changed` | Base domain changed in *Platform settings* (stored for the next start) | platform administrator | `settings` | `<old> -> <new> (applies after a restart)` |
@@ -271,6 +297,40 @@ to that tenant's log with the role `platform_admin` (marked *both* below).
 | `tenant_domain_added`, `tenant_domain_verified` (both), `tenant_domain_verify_failed`, `tenant_domain_removed` (both), `tenant_primary_domain_changed` (both) | Custom domains managed and verified (`tenant_domain_added` also by `sendora-db tenant-import -custom-domain`) | platform administrator or `sendora-db` | `tenant <slug> (<id>)` | `domain=<name>` |
 | `tenant_delete_failed` | Deleting a tenant failed | platform administrator | `tenant <slug> (<id>)` | the error |
 | `tenant_deleted` | Tenant deleted | platform administrator | `tenant <slug> (<id>)` | number of objects removed from object storage; with *force*, the locations whose objects were **not** removed |
+| `system_start`, `system_stop`, `audit_purged` | Start and orderly stop of the platform; retention of the platform log (`platform_audit_retention_days`, default 365) | system | `platform` | `version <v>`; `<n> records older than <d> days` |
+
+### 4.8 Key management
+
+Rotation requests are rows in the tenant's own database; the process that runs key jobs (the SQLite process, or the Cluster controller leader) executes them and records the result as `system`, naming the requester in the detail. Key material never appears in a record: details hold purposes, versions, fingerprints, counts, reasons and error texts. Every key event is also written to the database's control log ([ENCRYPTION.md](../ENCRYPTION.md#3-key-hierarchy)), which is separate from the audit log.
+
+Tenant audit log (category `security`):
+
+| Action | When | Actor | Target | Detail | Outcome |
+|---|---|---|---|---|---|
+| `key_rotation_requested`, `key_retire_requested`, `files_reencrypt_requested` | Administrator asked for a rotation, a retirement or the conversion of legacy files (critical actions, section 3) | caller | `keys` | `status=<code>` | by status |
+| `key_job_started` | The key job started | system | `keys:<purpose>` | the job and `requested by <name>` (`platform:<name>` for a forced rotation) | ok |
+| `key_rotation_completed`, `key_rotation_failed` | A rotation or files re-encryption job ended | system | `keys:<purpose>` | result or error, `(requested by <name>)` | ok / failed |
+| `key_retired`, `key_retire_failed` | A retirement job ended | system | `keys:<purpose>` | version and result or error, `(requested by <name>)` | ok / failed |
+| `key_rotation_forced` (category admin) | A platform administrator forced a rotation of this tenant's keys (multi-tenant and Cluster) | `platform:<name>`, role `platform_admin` | `tenant` | `purposes=<list>; reason=<text>` | ok |
+| `kek_step` | One step of a switch to, replacement of or release of the tenant-managed key (Cluster) | caller | `kek` | the step | ok |
+| `kek_switched`, `kek_switch_failed` | The tenant switched to its own key | caller | `kek` | `key fingerprint <fp>`; on failure plus the error | ok / failed |
+| `kek_replaced`, `kek_replace_failed` | The tenant replaced its own key | caller | `kek` | `old <fp> new <fp>`; on failure plus the error | ok / failed |
+| `kek_released`, `kek_release_failed` | The tenant returned to a platform-managed key | caller | `kek` | `key fingerprint <fp>`; on failure plus the error | ok / failed |
+| `kek_unlocked` | A locked tenant was unlocked through `POST /api/unlock`; written once the tenant can be opened again (best effort; the platform log always has `tenant_unlock`) | `unlock` (role `anonymous`) | `kek` | `key fingerprint <fp> presented from <address>` | ok |
+
+Platform audit log:
+
+| Action | When | Actor | Target | Detail | Outcome |
+|---|---|---|---|---|---|
+| `tenant_keys_rotation_requested` | Forced rotation placed for one tenant (Key management; step-up, written reason), also once per tenant of a bulk request. Not written for a tenant that is not active or (in a bulk request) holds its own key | platform administrator | `tenant <slug> (<id>)` | `purposes=<list> result=<result> reason=<text>` | the result: `queued`, `busy`, `locked` or `failed` |
+| `keys_rotation_requested_all` | Forced rotation for all platform-managed tenants | platform administrator | `all platform-managed tenants` | `purposes=<list> results=<counts per result> reason=<text>` | ok |
+| `tenant_unlock` | An unlock attempt on the public unlock page or `POST /api/unlock` (the tenant's own log cannot be written while it is locked) | `unlock` (role `system`) | `tenant#<slug>` | `key fingerprint <fp>`, `wrong key (fingerprint <fp>)`, `only <n> of <m> controllers acknowledged` or `controller error` | ok / failed |
+| `master_rotation_requested` | Master key rotation requested (Cluster; step-up, written reason) | platform administrator | `master key` | `version=<n> reason=<text>` | ok / refused |
+| `master_version_retired` | A master key version retired (Cluster) | platform administrator | `master key` | `version=<n> reason=<text>` | ok / refused |
+| `master_tenant_move_started`, `master_tenant_moved` | The controller leader started or finished moving one tenant to the new master key version | `master key rotation` (role `system`) | the tenant ID | `version <a> -> <b>`, for a tenant-managed tenant `tenant-managed; mac only; ...` | ok |
+| `master_rotation_finished` | Every tenant is on the new master key version | `master key rotation` (role `system`) | `all tenants` | `version=<n>` | ok |
+
+Not in the audit log: the key endpoint of the Cluster controllers (keys handed to web replicas, refusals, rate limiting) and `sendora-db tenant-unlock` are logged in the controller's process log (`keys: ...` lines, never key material), not in an audit chain. Offline key commands (`rotate-key`, `retire-key`, `files-reencrypt`, `upgrade-encryption`) write no audit records; their key events are in the control log.
 
 ## 5. Rate-limited and sampled events
 
@@ -297,6 +357,7 @@ On syslog it has MSGID `chain_head` (audit records use `audit`). A head that mov
 
 - Read access is not recorded in general (listing shares, reading settings, user lists, the access-review screen). Exceptions: reading the audit log (`audit_viewed`), exports, backup downloads, public downloads and previews (sampled).
 - Requests without valid credentials that end in 401 (they would allow flooding from the internet).
-- Offline actions with the `sendora-db` tool (`mfa-reset`, `backup`, `migrate`, `verify`, `verify-files`, `audit-verify`): it does not write audit records. Control them on the host.
-- Changes made directly in the database file by someone holding the key: they are detected by the chain verification (`/api/audit/status`, readiness check `audit_chain`, `sendora-db audit-verify`), not prevented.
+- Offline actions with the `sendora-db` tool (`mfa-reset`, `backup`, `migrate`, `verify`, `verify-files`, `audit-verify`, `upgrade-encryption`, `rotate-key`, `retire-key`, `files-reencrypt`, `shamir-split`, `shamir-combine`, `kek-generate`, `snapshot-plaintext`): they write no audit records (`storage-migrate`, `tenant-import` and `platform-admin-reset` do). Control them on the host.
+- Requests to the Cluster key endpoint: in the controller's process log only (section 4.8).
+- Changes made directly in the database by someone holding the keys: they are detected by the chain verification (`/api/audit/status`, readiness check `audit_chain`, `sendora-db audit-verify`), not prevented.
 - HTTP access logging: Sendora writes no access log; use the reverse proxy's log if required.

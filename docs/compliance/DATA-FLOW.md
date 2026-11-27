@@ -2,7 +2,7 @@
 
 This document shows which data moves between Sendora, its users and the systems around it, in which direction, over which protocol, and how each flow is encrypted and authenticated. It supports records of processing, data-protection impact assessments and network reviews. "Operator" means whoever runs the Sendora deployment.
 
-Written for version 0.2.0 (the optional object storage, flows 20–21, and multi-tenant mode, section 2.4, came with 0.2.0). The Cluster flavour of 0.3 is not covered yet ([cluster/QUICKSTART.md](../cluster/QUICKSTART.md), [ENCRYPTION.md](../ENCRYPTION.md)).
+Applies to version 0.3.0. The diagram and sections 2.1–2.3 show the single-tenant flavour; section 2.4 adds what the multi-tenant and Cluster flavours change, and section 2.5 the flows between the parts of the Cluster flavour (a preview). Object storage (flows 20–21) is optional in every flavour.
 
 [Back to the compliance index](README.md)
 
@@ -61,7 +61,7 @@ flowchart LR
     S <-->|"HTTPS, encrypted files<br/>and backup copies"| OBJ
 ```
 
-Solid arrows are network or file flows started by the component at the tail; dotted arrows are start-up reads, browser redirects or operator processes. The metrics scraper may also reach Sendora directly inside the cluster instead of through the proxy.
+Solid arrows are network or file flows started by the component at the tail; dotted arrows are start-up reads, browser redirects or operator processes. The metrics scraper may also reach Sendora directly inside the cluster instead of through the proxy. In the Cluster flavour the database is PostgreSQL instead of the SQLCipher file and only the controllers read the key file (section 2.5).
 
 ## 2. Flows
 
@@ -79,12 +79,12 @@ Solid arrows are network or file flows started by the component at the tail; dot
 
 | # | Flow | Data | Encryption at rest | Access control |
 |---|---|---|---|---|
-| 6 | Key file → Sendora | 32-byte database key, read once at start | None (it is the key). Operator protects it (Secret, file mode) | Owner root or service user; no group-write, no world access, else Sendora refuses to start |
-| 7 | Sendora ↔ database | Accounts, share metadata (names, descriptions, file names), settings, secrets, sessions, audit log | SQLCipher 4.20.0 (AES-256) | Process only |
-| 8 | Sendora ↔ share files | File contents (local backend, the default) | AES-256-GCM per file (uploads since 0.1.2). Directory names are the link IDs and file names are `<index>_<original name>`, both unencrypted. With an object store (flow 20) the share directory stays empty | `DATA_DIR/shares` and `DATA_DIR/uploads` are created with mode `0700` |
+| 6 | Key file → Sendora | 32-byte database key, read once at start. Every database's KEK is derived from it; the data keys are stored wrapped in the database ([ENCRYPTION.md](../ENCRYPTION.md#3-key-hierarchy)) | None (it is the key). Operator protects it (Secret, file mode) | Owner root or service user; no group-write, no world access, else Sendora refuses to start |
+| 7 | Sendora ↔ database | Accounts, share metadata (names, descriptions, file names), settings, secrets, sessions, audit log | SQLCipher 4.20.0 (AES-256), and inside it column encryption (AES-256-GCM) of names, e-mail addresses, password hashes, share and file names, settings, secrets and audit text ([ENCRYPTION.md](../ENCRYPTION.md#2-what-is-encrypted)) | Process only |
+| 8 | Sendora ↔ share files | File contents (local backend, the default) | AES-256-GCM per file under the tenant's `files` key. Directory names are the link IDs and file names are `<index>_<original name>`, both unencrypted. With an object store (flow 20) the share directory stays empty | `DATA_DIR/shares` and `DATA_DIR/uploads` are created with mode `0700` |
 | 9 | Sendora ↔ upload staging | Parts of files being uploaded (`uploads/<session>/<index>.part`) | **None** (plain while in progress); removed on completion, abort or after 24 h | `DATA_DIR/shares` and `DATA_DIR/uploads` are created with mode `0700` |
 | 10 | Sendora ↔ download snapshots | Temporary plain copy of a file for a verified download | **None**; removed after the transfer and at every start | Data directory |
-| 11 | Sendora → database backups | Copy of the database (no share files); automatic every 24 h while `backups_enabled`, kept `backup_keep` (default 7) | SQLCipher, same key | Administrators can download them (step-up, audited) |
+| 11 | Sendora → database backups | Copy of the database (no share files); automatic every 24 h while `backups_enabled`, kept `backup_keep` (default 7). SQLite flavours only; in the Cluster flavour the operator backs up PostgreSQL | SQLCipher, same key, with the column encryption inside | Administrators can download them (step-up, audited) |
 | 12 | Host → operator backups | Whatever the operator copies: the volume (database, share files, backups) and, separately, the key | Operator responsibility; the database and file contents stay encrypted, names on the volume do not | Operator |
 
 ### 2.3 Outbound (Sendora to other systems)
@@ -105,16 +105,33 @@ Audit records may contain personal data (username, target labels, optional IP ad
 
 The object storage provider (flows 20–21) is a sub-processor of **encrypted** data only: it sees object sizes, times and access patterns, never contents, names or keys ([STORAGE.md](../STORAGE.md#4-object-layout-and-what-the-provider-can-see)). Workload identity also contacts the cloud's token service (STS, Entra ID, Google OAuth or the metadata server).
 
-The server makes no other outbound connections. The web interface loads nothing from third parties: its Content Security Policy limits scripts, styles, images, media and API calls to the Sendora origin (`'self'`, plus `data:`/`blob:` for images and media and inline style attributes). The setting `ui_use_unsplash` is passed to the interface but no code in 0.2.0 acts on it.
+The server makes no other outbound connections. The web interface loads nothing from third parties: its Content Security Policy limits scripts, styles, images, media and API calls to the Sendora origin (`'self'`, plus `data:`/`blob:` for images and media and inline style attributes). The setting `ui_use_unsplash` is passed to the interface but no code in 0.3.0 acts on it.
 
 ### 2.4 Multi-tenant mode (optional)
 
+This section applies to the multi-tenant flavour and, with the differences in section 2.5, to the Cluster flavour.
+
 - Requests are routed by host: `<slug>.<base domain>` or a verified custom domain to that tenant's own server and database (`DATA_DIR/tenants/<random id>/`), `admin.<base domain>` to the platform console (`DATA_DIR/platform.db`). No request of one tenant reads another tenant's database or directory.
-- The platform database holds tenant names, subdomains, custom domains, quotas, counts (users, stored bytes), the storage configuration, platform administrators (username, email, bcrypt hash, TOTP secret) and the platform audit log. It holds no tenant user, share or file data.
+- The platform database holds tenant names, subdomains, custom domains, quotas, counts (users, stored bytes), the storage configuration, each tenant's key mode and key fingerprint, platform administrators (username, email, bcrypt hash, TOTP secret) and the platform audit log. It holds no tenant user, share or file data.
 - Outbound: DNS TXT lookups for custom-domain verification; email through the tenant's SMTP server or, when the tenant has none, the platform's default SMTP server (`SENDORA_PLATFORM_SMTP_*`).
 - Object storage per tenant (flows 20–21 per tenant): the tenant's own S3, Azure Blob or GCS account, or a storage offer of the platform (the platform bucket under `<prefix>tenants/<tenant id>/`, or the server's disk). Files are encrypted with the tenant's own file key before upload; the console sees only the kind and usage of a tenant's own storage. A new tenant has no storage until one is set up.
 - Targets a tenant's administrator configures (SMTP server, OIDC issuer, audit webhook and syslog, own storage endpoint) must not resolve to loopback, private, link-local, CGNAT or metadata addresses; the check runs when saved and on every connection (`internal/netguard`), unless the platform allows private targets for that tenant.
 - The console reads only counts from a tenant (when the tenant is open) and writes records into the tenant's audit log for platform actions affecting it.
+
+### 2.5 Cluster flavour (preview)
+
+The Cluster flavour runs `web` replicas (serve tenants and the platform console) and `controller` replicas (one leader at a time; databases, provisioning, background jobs, the master key) on Kubernetes, with a PostgreSQL cluster that the operator provides ([cluster/QUICKSTART.md](../cluster/QUICKSTART.md)). Flows 1–5 and 13–21 stay as above: requests are handled by a web replica, background work (mail queues, retention, storage deletions, key jobs) by the controller leader. Flows 7 and 11 are replaced by the flows below; there is no SQLCipher file.
+
+| # | Flow | Data | Direction | Protocol | Encryption in transit | Authentication |
+|---|---|---|---|---|---|---|
+| 22 | Web replica → PgBouncer pooler → PostgreSQL | Tenant and platform rows: column-encrypted values, blind indexes, wrapped keys, the control log, and the columns that are not column-encrypted (IDs, timestamps, statuses, quotas, sizes) | in / out | PostgreSQL protocol through PgBouncer (transaction mode) | TLS; `SENDORA_PG_SSLMODE` default `verify-full` against `SENDORA_PG_CA_FILE` | Per-tenant app role with DML-only grants (SCRAM password); no provisioner credentials and no direct database access on web replicas |
+| 23 | Controller → PostgreSQL (direct and through the pooler) | Creating and migrating the platform and tenant databases and roles, coordination (leases, rate-limit counters, notifications), job state | in / out | PostgreSQL protocol | TLS as flow 22 | `sendora_provisioner` (create database and role, not superuser) from `SENDORA_PG_PROVISIONER_DIR`, controllers only |
+| 24 | Web replica → controller key endpoint | The derived keys of the tenants the replica serves (no master key); for a tenant-managed tenant the key the tenant presents on unlock, switch, replace or release | out | HTTPS on port 8443 | TLS 1.3, server certificate checked against `SENDORA_KEY_CA` | Projected ServiceAccount token (audience `sendora-keys`), checked by the controller with the Kubernetes TokenReview API; only the web ServiceAccount is accepted; rate limited |
+| 25 | Controller → Kubernetes API | Lease (leader election) and TokenReview requests | out | HTTPS | TLS (cluster CA) | The controller's ServiceAccount: `leases` get/create/update in its namespace and `tokenreviews` create |
+| 26 | Web and controller replicas ↔ shared volume | Share files (as flow 8) on a volume every replica mounts (RWX), or an object store (flow 20) | in / out | File system | As flow 8; the volume's own encryption is the operator's | Mount permissions |
+| 27 | Master key Secret → controllers | The master key (one file or a directory of `master-<n>` versions), read by controllers only; web replicas refuse to start with it | — | Mounted Secret | None (it is the key) | Kubernetes RBAC on Secrets, `pods/exec`; etcd encryption |
+
+PostgreSQL has no whole-database encryption: the database administrator, replication and backups see everything that is not column-encrypted ([ENCRYPTION.md](../ENCRYPTION.md#2-what-is-encrypted)). Unlock attempts for tenant-managed tenants are recorded in the platform audit log; requests to the key endpoint are recorded in the controller's process log ([AUDIT-EVENTS.md](AUDIT-EVENTS.md)).
 
 ## 3. Operator checklist for the flows
 
@@ -123,4 +140,5 @@ The server makes no other outbound connections. The web interface loads nothing 
 - Use `starttls` or `tls` for SMTP (flow 13), TLS for syslog (flow 17) and HTTPS for the webhook (flow 18).
 - Restrict egress to the SMTP server, identity providers, forwarding destinations and, if enabled, `api.pwnedpasswords.com`.
 - Encrypt and protect the volume and its backups (flows 9, 10, 12) and keep the key apart from the data.
+- Cluster flavour: keep `SENDORA_PG_SSLMODE=verify-full`, encrypt the PostgreSQL volumes and backups, restrict the key Secret and `pods/exec` to the controllers' operators, and apply NetworkPolicies so that only web pods reach the key endpoint (flow 24) and only the poolers and controllers reach PostgreSQL ([cluster/QUICKSTART.md](../cluster/QUICKSTART.md#45-networkpolicy-recommended-not-applied)).
 - With an object store (flows 20–21): private bucket, TLS-only policy, least-privilege credentials or workload identity, a region that meets your residency requirements, versioning/soft-delete retention that matches your erasure statements, and egress to the provider's endpoints (443).

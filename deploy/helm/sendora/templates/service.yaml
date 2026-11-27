@@ -14,7 +14,9 @@ spec:
   selector:
     {{- include "sendora.selectorLabels" (dict "ctx" . "component" "web") | nindent 4 }}
   ports:
-    - { name: http, port: {{ .Values.service.port }}, targetPort: http }
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
 ---
 # Headless: the name resolves to every ready controller pod. Web replicas present a
 # tenant's key to ALL controllers (each keeps it in its own memory), so they need the
@@ -30,7 +32,9 @@ spec:
   selector:
     {{- include "sendora.selectorLabels" (dict "ctx" . "component" "controller") | nindent 4 }}
   ports:
-    - { name: keys, port: {{ .Values.cluster.keyEndpoint.port }}, targetPort: keys }
+    - name: keys
+      port: {{ .Values.cluster.keyEndpoint.port }}
+      targetPort: keys
 {{- else }}
 apiVersion: v1
 kind: Service
@@ -46,5 +50,7 @@ spec:
   selector:
     {{- include "sendora.selectorLabels" (dict "ctx" . "component" "app") | nindent 4 }}
   ports:
-    - { name: http, port: {{ .Values.service.port }}, targetPort: http }
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
 {{- end }}

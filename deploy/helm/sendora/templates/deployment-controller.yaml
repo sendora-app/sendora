@@ -42,54 +42,85 @@ spec:
           securityContext:
             {{- include "sendora.containerSecurityContext" . | nindent 12 }}
           ports:
-            - { name: keys, containerPort: {{ $port }} }
-            - { name: http, containerPort: 8080 }
+            - name: keys
+              containerPort: {{ $port }}
+            - name: http
+              containerPort: 8080
           envFrom:
-            - configMapRef: { name: {{ include "sendora.configName" . }} }
+            - configMapRef:
+                name: {{ include "sendora.configName" . }}
             {{- with .Values.extraEnvFrom }}{{ toYaml . | nindent 12 }}{{ end }}
           env:
-            - { name: SENDORA_ROLE, value: controller }
+            - name: SENDORA_ROLE
+              value: controller
             {{- include "sendora.clusterCommonEnv" . | nindent 12 }}
-            - { name: SENDORA_PG_DIRECT, value: {{ $c.postgres.direct | quote }} }
-            - { name: SENDORA_PG_PROVISIONER_DIR, value: /etc/pg-prov }
-            - { name: SENDORA_DB_KEY_FILE, value: {{ include "sendora.keyFilePath" (dict "ctx" . "dir" "/etc/sendora-key") | quote }} }
-            - { name: SENDORA_KEY_JOB_CONCURRENCY, value: {{ .Values.keys.jobConcurrency | quote }} }
-            - { name: SENDORA_KEY_ADDR, value: {{ printf ":%d" $port | quote }} }
-            - { name: SENDORA_KEY_TLS_CERT, value: /etc/sendora-keys-tls/tls.crt }
-            - { name: SENDORA_KEY_TLS_KEY, value: /etc/sendora-keys-tls/tls.key }
-            - { name: SENDORA_KEY_USER, value: {{ default (printf "system:serviceaccount:%s:%s" .Release.Namespace (include "sendora.webServiceAccount" .)) $c.keyEndpoint.user | quote }} }
+            - name: SENDORA_PG_DIRECT
+              value: {{ $c.postgres.direct | quote }}
+            - name: SENDORA_PG_PROVISIONER_DIR
+              value: /etc/pg-prov
+            - name: SENDORA_DB_KEY_FILE
+              value: {{ include "sendora.keyFilePath" (dict "ctx" . "dir" "/etc/sendora-key") | quote }}
+            - name: SENDORA_KEY_JOB_CONCURRENCY
+              value: {{ .Values.keys.jobConcurrency | quote }}
+            - name: SENDORA_KEY_ADDR
+              value: {{ printf ":%d" $port | quote }}
+            - name: SENDORA_KEY_TLS_CERT
+              value: /etc/sendora-keys-tls/tls.crt
+            - name: SENDORA_KEY_TLS_KEY
+              value: /etc/sendora-keys-tls/tls.key
+            - name: SENDORA_KEY_USER
+              value: {{ default (printf "system:serviceaccount:%s:%s" .Release.Namespace (include "sendora.webServiceAccount" .)) $c.keyEndpoint.user | quote }}
             {{- with .Values.extraEnv }}{{ toYaml . | nindent 12 }}{{ end }}
           resources:
             {{- toYaml $cfg.resources | nindent 12 }}
           readinessProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet:
+              path: /api/health
+              port: http
             {{- toYaml $c.probes.readiness | nindent 12 }}
           livenessProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet:
+              path: /api/health
+              port: http
             {{- toYaml $c.probes.liveness | nindent 12 }}
           volumeMounts:
-            - { name: files, mountPath: /data }
-            - { name: key, mountPath: /etc/sendora-key, readOnly: true }
-            - { name: keys-tls, mountPath: /etc/sendora-keys-tls, readOnly: true }
-            - { name: prov, mountPath: /etc/pg-prov, readOnly: true }
+            - name: files
+              mountPath: /data
+            - name: key
+              mountPath: /etc/sendora-key
+              readOnly: true
+            - name: keys-tls
+              mountPath: /etc/sendora-keys-tls
+              readOnly: true
+            - name: prov
+              mountPath: /etc/pg-prov
+              readOnly: true
             {{- include "sendora.pgCAMount" . | nindent 12 }}
-            - { name: tmp, mountPath: /tmp }
+            - name: tmp
+              mountPath: /tmp
             {{- with .Values.extraVolumeMounts }}{{ toYaml . | nindent 12 }}{{ end }}
       volumes:
         {{- include "sendora.dataVolume" . | nindent 8 }}
         - name: key
-          secret: { secretName: {{ include "sendora.keySecretName" . }}, defaultMode: 0400 }
+          secret:
+            secretName: {{ include "sendora.keySecretName" . }}
+            defaultMode: 0400
         - name: keys-tls
           secret:
             secretName: {{ include "sendora.keysTLSSecretName" . }}
             defaultMode: 0400
             items:
-              - { key: tls.crt, path: tls.crt }
-              - { key: tls.key, path: tls.key }
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
         - name: prov
-          secret: { secretName: {{ $c.postgres.provisionerSecret.name }}, defaultMode: 0400 }
+          secret:
+            secretName: {{ $c.postgres.provisionerSecret.name }}
+            defaultMode: 0400
         {{- include "sendora.pgCAVolume" . | nindent 8 }}
         - name: tmp
-          emptyDir: { sizeLimit: {{ .Values.tmp.sizeLimit }} }
+          emptyDir:
+            sizeLimit: {{ .Values.tmp.sizeLimit }}
         {{- with .Values.extraVolumes }}{{ toYaml . | nindent 8 }}{{ end }}
 {{- end }}

@@ -41,27 +41,40 @@ spec:
           securityContext:
             {{- include "sendora.containerSecurityContext" . | nindent 12 }}
           ports:
-            - { name: http, containerPort: 8080 }
+            - name: http
+              containerPort: 8080
           envFrom:
-            - configMapRef: { name: {{ include "sendora.configName" . }} }
+            - configMapRef:
+                name: {{ include "sendora.configName" . }}
             {{- with .Values.extraEnvFrom }}{{ toYaml . | nindent 12 }}{{ end }}
           env:
-            - { name: SENDORA_FLAVOUR, value: {{ .Values.flavour | quote }} }
-            - { name: HOST, value: "0.0.0.0" }
-            - { name: PORT, value: "8080" }
-            - { name: DATA_DIR, value: /data }
-            - { name: SENDORA_DB_KEY_FILE, value: {{ include "sendora.keyFilePath" (dict "ctx" . "dir" "/run/secrets/sendora") | quote }} }
-            - { name: SENDORA_KEY_JOB_CONCURRENCY, value: {{ .Values.keys.jobConcurrency | quote }} }
-            - { name: SENDORA_KEY_OPS_PER_HOUR, value: {{ .Values.keys.opsPerHour | quote }} }
-            - { name: SENDORA_DB_INITIALIZE, value: {{ .Values.database.initialize | toString | quote }} }
+            - name: SENDORA_FLAVOUR
+              value: {{ .Values.flavour | quote }}
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: DATA_DIR
+              value: /data
+            - name: SENDORA_DB_KEY_FILE
+              value: {{ include "sendora.keyFilePath" (dict "ctx" . "dir" "/run/secrets/sendora") | quote }}
+            - name: SENDORA_KEY_JOB_CONCURRENCY
+              value: {{ .Values.keys.jobConcurrency | quote }}
+            - name: SENDORA_KEY_OPS_PER_HOUR
+              value: {{ .Values.keys.opsPerHour | quote }}
+            - name: SENDORA_DB_INITIALIZE
+              value: {{ .Values.database.initialize | toString | quote }}
             {{- if eq .Values.flavour "multi" }}
-            - { name: SENDORA_BASE_DOMAIN, value: {{ .Values.baseDomain | quote }} }
+            - name: SENDORA_BASE_DOMAIN
+              value: {{ .Values.baseDomain | quote }}
             {{- end }}
             {{- if and .Values.appUrl (eq .Values.flavour "single") }}
-            - { name: APP_URL, value: {{ .Values.appUrl | quote }} }
+            - name: APP_URL
+              value: {{ .Values.appUrl | quote }}
             {{- end }}
             {{- if .Values.trustedProxies }}
-            - { name: SENDORA_TRUSTED_PROXIES, value: {{ .Values.trustedProxies | quote }} }
+            - name: SENDORA_TRUSTED_PROXIES
+              value: {{ .Values.trustedProxies | quote }}
             {{- end }}
             {{- if include "sendora.setupCodeEnabled" . }}
             {{- include "sendora.setupCodeEnv" . | nindent 12 }}
@@ -70,30 +83,44 @@ spec:
           resources:
             {{- toYaml $app.resources | nindent 12 }}
           startupProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet:
+              path: /api/health
+              port: http
             {{- toYaml $app.probes.startup | nindent 12 }}
           readinessProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet:
+              path: /api/health
+              port: http
             {{- toYaml $app.probes.readiness | nindent 12 }}
           livenessProbe:
-            httpGet: { path: /api/health, port: http }
+            httpGet:
+              path: /api/health
+              port: http
             {{- toYaml $app.probes.liveness | nindent 12 }}
           volumeMounts:
-            - { name: data, mountPath: /data }
-            - { name: database-key, mountPath: /run/secrets/sendora, readOnly: true }
-            - { name: tmp, mountPath: /tmp }
+            - name: data
+              mountPath: /data
+            - name: database-key
+              mountPath: /run/secrets/sendora
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
             {{- with .Values.extraVolumeMounts }}{{ toYaml . | nindent 12 }}{{ end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
-          persistentVolumeClaim: { claimName: {{ include "sendora.pvcName" . }} }
+          persistentVolumeClaim:
+            claimName: {{ include "sendora.pvcName" . }}
           {{- else }}
           emptyDir: {}
           {{- end }}
         - name: database-key
-          secret: { secretName: {{ include "sendora.keySecretName" . }}, defaultMode: 0440 }
+          secret:
+            secretName: {{ include "sendora.keySecretName" . }}
+            defaultMode: 0440
         - name: tmp
-          emptyDir: { sizeLimit: {{ .Values.tmp.sizeLimit }} }
+          emptyDir:
+            sizeLimit: {{ .Values.tmp.sizeLimit }}
         {{- with .Values.extraVolumes }}{{ toYaml . | nindent 8 }}{{ end }}
       {{- with $app.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}

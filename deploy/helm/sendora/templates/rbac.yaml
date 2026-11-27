@@ -8,9 +8,14 @@ metadata:
   labels:
     {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 4 }}
 rules:
-  - apiGroups: [coordination.k8s.io]
-    resources: [leases]
-    verbs: [get, create, update]
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - create
+      - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -18,9 +23,14 @@ metadata:
   name: {{ include "sendora.controllerName" . }}-lease
   labels:
     {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 4 }}
-roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ include "sendora.controllerName" . }}-lease }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "sendora.controllerName" . }}-lease
 subjects:
-  - { kind: ServiceAccount, name: {{ $sa }}, namespace: {{ .Release.Namespace }} }
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
 # TokenReview is cluster-scoped: it lets the controller verify the tokens web pods present to the key endpoint.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -30,9 +40,12 @@ metadata:
   labels:
     {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 4 }}
 rules:
-  - apiGroups: [authentication.k8s.io]
-    resources: [tokenreviews]
-    verbs: [create]
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -40,7 +53,12 @@ metadata:
   name: {{ include "sendora.controllerName" . }}-{{ .Release.Namespace }}-tokenreview
   labels:
     {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 4 }}
-roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ include "sendora.controllerName" . }}-{{ .Release.Namespace }}-tokenreview }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "sendora.controllerName" . }}-{{ .Release.Namespace }}-tokenreview
 subjects:
-  - { kind: ServiceAccount, name: {{ $sa }}, namespace: {{ .Release.Namespace }} }
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
 {{- end }}

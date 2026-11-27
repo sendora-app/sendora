@@ -5,7 +5,8 @@ name: CI
 # published from a commit whose tests fail.
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
   workflow_call:
     inputs:
@@ -136,7 +137,9 @@ jobs:
         run: docker logs minio; docker logs azurite; docker logs fakegcs
 
   image:
-    needs: [web, go]
+    needs:
+      - web
+      - go
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

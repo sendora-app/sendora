@@ -83,14 +83,15 @@ Cluster and multi, the [QUICKSTART](cluster/QUICKSTART.md) runbook with the char
 
 ## 2. The image
 
-No 0.3 image is published yet. Build it from the repository (the web bundle is built inside):
+The chart uses the release image `ghcr.io/sendora-app/sendora:0.3.0` (amd64 and arm64, signed, with provenance and
+SBOM attestations; see [SECURITY.md](../SECURITY.md)). To run your own build instead:
 
 ```sh
 docker build -t registry.example.com/sendora:0.3.0 .          # add --platform linux/arm64 as needed
 docker push registry.example.com/sendora:0.3.0
 ```
 
-Values: `image.repository`, `image.tag` (default `Chart.appVersion`, `0.3.0-dev`), `image.digest` (wins over the
+Values: `image.repository`, `image.tag` (default `Chart.appVersion`, `0.3.0`), `image.digest` (wins over the
 tag), `image.pullPolicy`, `image.pullSecrets`. Forks must set `SENDORA_SOURCE_URL` through `config:`
 ([configuration](configuration.md)).
 

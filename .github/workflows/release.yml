@@ -14,7 +14,8 @@ name: Release image
 # Actions are pinned to full commit SHAs (version in the comment).
 on:
   push:
-    tags: ["v*.*.*"]
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
@@ -90,7 +91,9 @@ jobs:
       ref: ${{ needs.prepare.outputs.ref }}
 
   build:
-    needs: [prepare, ci]
+    needs:
+      - prepare
+      - ci
     timeout-minutes: 60
     permissions:
       contents: read
@@ -163,7 +166,9 @@ jobs:
           retention-days: 1
 
   merge:
-    needs: [prepare, build]
+    needs:
+      - prepare
+      - build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
