@@ -1,0 +1,24 @@
+# Cilium addition to networkpolicy.yaml (docs/cluster/QUICKSTART.md, section 4.5).
+#
+# Cilium does not match the Kubernetes API server with an ipBlock (it is the kube-apiserver entity), so
+# the controllers' API rule in networkpolicy.yaml has no effect there. This policy allows exactly that
+# traffic: Lease (leader election) and TokenReview (key endpoint authentication). Policies are additive:
+# apply it next to networkpolicy.yaml. Tested on kind with Cilium 1.20.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: sendora-controller-kube-api
+  namespace: sendora-cluster
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+  egress:
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP

@@ -1,0 +1,94 @@
+{{- if eq .Values.flavour "cluster" }}
+{{- $c := .Values.cluster }}
+{{- $cfg := $c.web }}
+{{- $tls := $c.keyEndpoint.tls }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sendora.webName" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "web") | nindent 4 }}
+spec:
+  replicas: {{ $cfg.replicas }}
+  strategy:
+    type: RollingUpdate
+    {{- toYaml (dict "rollingUpdate" $cfg.strategy.rollingUpdate) | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "sendora.selectorLabels" (dict "ctx" . "component" "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sendora.labels" (dict "ctx" . "component" "web") | nindent 8 }}
+        {{- with $cfg.podLabels }}{{ toYaml . | nindent 8 }}{{ end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with $cfg.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+    spec:
+      serviceAccountName: {{ include "sendora.webServiceAccount" . }}
+      # No master key and no automounted token: only the projected token below.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- include "sendora.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- include "sendora.podSecurityContext" . | nindent 8 }}
+      terminationGracePeriodSeconds: {{ $cfg.terminationGracePeriodSeconds }}
+      {{- include "sendora.podScheduling" (dict "ctx" . "cfg" $cfg) | nindent 6 }}
+      {{- include "sendora.topologySpread" (dict "ctx" . "component" "web" "cfg" $cfg) | nindent 6 }}
+      containers:
+        - name: web
+          image: {{ include "sendora.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "sendora.containerSecurityContext" . | nindent 12 }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          envFrom:
+            - configMapRef: { name: {{ include "sendora.configName" . }} }
+            {{- with .Values.extraEnvFrom }}{{ toYaml . | nindent 12 }}{{ end }}
+          env:
+            - { name: SENDORA_ROLE, value: web }
+            {{- include "sendora.clusterCommonEnv" . | nindent 12 }}
+            - { name: SENDORA_KEY_URL, value: {{ include "sendora.keyURL" . | quote }} }
+            - { name: SENDORA_KEY_CA, value: /etc/sendora-keys-ca/ca.crt }
+            - { name: SENDORA_KEY_TOKEN_FILE, value: /var/run/sendora-keys/token }
+            - { name: SENDORA_KEY_TTL_SECONDS, value: {{ $c.keyEndpoint.ttlSeconds | quote }} }
+            {{- if .Values.trustedProxies }}
+            - { name: SENDORA_TRUSTED_PROXIES, value: {{ .Values.trustedProxies | quote }} }
+            {{- end }}
+            {{- include "sendora.setupCodeEnv" . | nindent 12 }}
+            {{- with .Values.extraEnv }}{{ toYaml . | nindent 12 }}{{ end }}
+          resources:
+            {{- toYaml $cfg.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            {{- toYaml $c.probes.readiness | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            {{- toYaml $c.probes.liveness | nindent 12 }}
+          volumeMounts:
+            - { name: files, mountPath: /data }
+            - { name: keys-ca, mountPath: /etc/sendora-keys-ca, readOnly: true }
+            - { name: keys-token, mountPath: /var/run/sendora-keys, readOnly: true }
+            {{- include "sendora.pgCAMount" . | nindent 12 }}
+            - { name: tmp, mountPath: /tmp }
+            {{- with .Values.extraVolumeMounts }}{{ toYaml . | nindent 12 }}{{ end }}
+      volumes:
+        {{- include "sendora.dataVolume" . | nindent 8 }}
+        - name: keys-ca
+          {{- if $tls.generate }}
+          configMap: { name: {{ include "sendora.keysCAConfigMapName" . }}, items: [{ key: ca.crt, path: ca.crt }] }
+          {{- else if $tls.caConfigMap }}
+          configMap: { name: {{ $tls.caConfigMap }}, items: [{ key: {{ $tls.caKey }}, path: ca.crt }] }
+          {{- else }}
+          secret: { secretName: {{ default $tls.existingSecret $tls.caSecret }}, items: [{ key: {{ $tls.caKey }}, path: ca.crt }] }
+          {{- end }}
+        - name: keys-token
+          projected:
+            sources:
+              - serviceAccountToken: { audience: sendora-keys, expirationSeconds: 600, path: token }
+        {{- include "sendora.pgCAVolume" . | nindent 8 }}
+        - name: tmp
+          emptyDir: { sizeLimit: {{ .Values.tmp.sizeLimit }} }
+        {{- with .Values.extraVolumes }}{{ toYaml . | nindent 8 }}{{ end }}
+{{- end }}

@@ -1,0 +1,259 @@
+# Recommended NetworkPolicies for the Sendora Cluster flavour (docs/cluster/QUICKSTART.md, section 4.5).
+#
+# Not applied by Sendora: they only work on a CNI that enforces NetworkPolicy, and others silently ignore
+# them. A starting point, not part of the product: adapt the namespaces, labels and the optional egress at the
+# end of the web and controller policies to your cluster before you apply it. The names below match the
+# other examples in this directory: Sendora in namespace sendora-cluster with the pod labels
+# app.kubernetes.io/component=web|controller, CloudNativePG cluster sendora-pg with poolers
+# sendora-pg-pooler-rw / -ro in namespace sendora-postgresql, CNPG operator in cnpg-system.
+#
+# Plain networking.k8s.io/v1 objects: they need a CNI that enforces NetworkPolicy (Cilium, Calico, ...).
+# Tested on kind with Cilium 1.20 (allowed and refused connections from probe pods).
+# On Cilium also apply networkpolicy-cilium.yaml: an ipBlock does not match the Kubernetes API server there.
+#
+# The Helm chart renders its own variant with networkPolicy.enabled=true (docs/helm.md); use either, not both.
+---
+# 1. Sendora namespace: nothing in, nothing out, unless a policy below allows it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: sendora-cluster
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# 2. DNS for every Sendora pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: sendora-cluster
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# 3. Web replicas: requests from the ingress controller only; out to the poolers (never the PostgreSQL
+#    instances directly) and to the controllers' key endpoint. No Kubernetes API, no master key.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sendora-web
+  namespace: sendora-cluster
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: web
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx  # your ingress controller
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sendora-postgresql
+          podSelector:
+            matchExpressions:
+              - key: cnpg.io/poolerName
+                operator: In
+                values:
+                  - sendora-pg-pooler-rw
+                  - sendora-pg-pooler-ro
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: controller
+      ports:
+        - protocol: TCP
+          port: 8443
+    # Optional, only what you use: SMTP (mail), HTTPS (OIDC provider, object storage, the Have I Been
+    # Pwned range API). Narrow the CIDR to the actual targets where you can.
+    # - to: [{ ipBlock: { cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] } }]
+    #   ports: [{ protocol: TCP, port: 443 }, { protocol: TCP, port: 587 }, { protocol: TCP, port: 465 }]
+---
+# 4. Controllers: the key endpoint (8443) is reachable from web replicas only. Out to PostgreSQL (poolers
+#    and the instances for the direct read-write connection the controller uses to provision tenants) and
+#    to the Kubernetes API (Lease for leader election, TokenReview for the key endpoint).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sendora-controller
+  namespace: sendora-cluster
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: web
+      ports:
+        - protocol: TCP
+          port: 8443
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sendora-postgresql
+          podSelector:
+            matchExpressions:
+              - key: cnpg.io/poolerName
+                operator: In
+                values:
+                  - sendora-pg-pooler-rw
+                  - sendora-pg-pooler-ro
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sendora-postgresql
+          podSelector:
+            matchLabels:
+              cnpg.io/cluster: sendora-pg
+              cnpg.io/podRole: instance
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Kubernetes API: replace the address with your API server endpoint(s), one /32 each
+    # (kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes). Never 0.0.0.0/0: that
+    # would also open port 443 to the internet. On Cilium this rule matches nothing (the API server is a
+    # cluster entity, not a CIDR); networkpolicy-cilium.yaml allows it instead.
+    - to:
+        - ipBlock:
+            cidr: 192.0.2.10/32  # REPLACE
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # Optional, as for the web replicas (the controller leader runs the background jobs: mail, object storage).
+---
+# 5. PostgreSQL namespace, ingress only (egress of CNPG pods stays open: the instance manager needs the
+#    Kubernetes API, and a wrong egress rule there stops replication).
+#    Instances: replication between instances, CNPG join/recovery jobs, the CNPG operator, the poolers and
+#    the Sendora controllers (direct read-write connection). Kubelet probes come from the node and are
+#    allowed by most CNIs without a rule (Cilium: the host entity).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sendora-pg-instances
+  namespace: sendora-postgresql
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: sendora-pg
+      cnpg.io/podRole: instance
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: sendora-pg
+              cnpg.io/podRole: instance
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: sendora-pg
+            matchExpressions:
+              - key: cnpg.io/jobRole
+                operator: In
+                values:
+                  - join
+                  - full-recovery
+                  - snapshot-recovery
+                  - pgbasebackup
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 8000
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: cnpg.io/poolerName
+                operator: In
+                values:
+                  - sendora-pg-pooler-rw
+                  - sendora-pg-pooler-ro
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sendora-cluster
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: controller
+      ports:
+        - protocol: TCP
+          port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 5432
+---
+# 6. Poolers: Sendora web replicas and controllers only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sendora-pg-poolers
+  namespace: sendora-postgresql
+spec:
+  podSelector:
+    matchExpressions:
+      - key: cnpg.io/poolerName
+        operator: In
+        values:
+          - sendora-pg-pooler-rw
+          - sendora-pg-pooler-ro
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: sendora-cluster
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - web
+                  - controller
+      ports:
+        - protocol: TCP
+          port: 5432

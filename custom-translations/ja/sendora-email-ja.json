@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "ja",
+  "name": "日本語",
+  "templates": {
+    "share_created": {
+      "subject": "{{.SenderName}}さんがファイルを共有しました",
+      "body": "{{.RecipientName}}さん、こんにちは。\n\n{{.SenderName}}さんがファイルを共有しました: {{.URL}}\n\n{{.Message}}\n\n有効期限: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "共有ファイルのダウンロードが開始されました",
+      "body": "共有「{{.ShareName}}」のダウンロードが開始されました。\n\nファイル: {{.FileNames}}\n開始日時: {{.StartedAt}}\nダウンロード回数: {{.DownloadCount}}\n\nこれはファイル配信の開始を記録するものであり、転送の完了や、受信者がファイルを保存または閲覧したことを示すものではありません。"
+    },
+    "share_expiring": {
+      "subject": "共有の有効期限がまもなく切れます",
+      "body": "共有「{{.ShareName}}」は {{.Expires}} に有効期限が切れます: {{.URL}}"
+    },
+    "password_reset": {
+      "subject": "パスワードのリセット",
+      "body": "パスワードをリセットするには次のリンクを開いてください: {{.URL}}\n\nこのリンクの有効期間は1時間です。"
+    },
+    "verify_email": {
+      "subject": "メールアドレスの確認",
+      "body": "確認コードは {{.Code}} です"
+    },
+    "reverse_invite": {
+      "subject": "{{.SenderName}}さんからファイルのアップロード依頼が届いています",
+      "body": "{{.RecipientName}}さん、こんにちは。\n\n{{.SenderName}}さんがファイルのアップロードを依頼しています: {{.URL}}\n\n{{.Message}}"
+    },
+    "reverse_completed": {
+      "subject": "ファイルがアップロードされました",
+      "body": "{{.SenderName}}さんがあなた宛にファイルをアップロードしました: {{.URL}}\n\n共有: {{.ShareName}}"
+    },
+    "welcome": {
+      "subject": "{{.ApplicationName}}のアカウントを作成しました",
+      "body": "{{.RecipientName}}さん、こんにちは。\n\n{{.ApplicationName}}にあなたのアカウントが作成されました。\n\nユーザー名: {{.Username}}\nログイン: {{.LoginURL}}\n\n次のリンクから自分でパスワードを設定してください(リンクは1回のみ使用でき、有効期間は{{.ExpiresDays}}日間です):\n{{.SetPasswordURL}}\n\n心当たりがない場合は、このメールを無視してください。"
+    }
+  }
+}

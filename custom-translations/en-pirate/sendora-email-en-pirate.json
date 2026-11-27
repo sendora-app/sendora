@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "en-pirate",
+  "name": "Pirate English",
+  "templates": {
+    "share_created": {
+      "subject": "Ahoy! {{.SenderName}} shared some booty (files) with ye",
+      "body": "Ahoy {{.RecipientName}},\n\n{{.SenderName}} shared some booty (files) with ye: {{.URL}}\n\n{{.Message}}\n\nThe treasure expires: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "Avast! A download o' yer share has started",
+      "body": "A download o' yer share \"{{.ShareName}}\" has started.\n\nBooty (files): {{.FileNames}}\nStarted at: {{.StartedAt}}\nDownload count: {{.DownloadCount}}\n\nThis records the start o' file servin', not a completed transfer or confirmation that the recipient saved or read the files."
+    },
+    "share_expiring": {
+      "subject": "Yer share be expirin' soon",
+      "body": "Yer share \"{{.ShareName}}\" expires on {{.Expires}}: {{.URL}}"
+    },
+    "password_reset": {
+      "subject": "Password reset, matey",
+      "body": "Reset yer password: {{.URL}}\n\nThis link be valid for 1 hour."
+    },
+    "verify_email": {
+      "subject": "Verify yer email, matey",
+      "body": "Yer verification code be {{.Code}}"
+    },
+    "reverse_invite": {
+      "subject": "{{.SenderName}} invites ye to upload booty (files)",
+      "body": "Ahoy {{.RecipientName}},\n\n{{.SenderName}} invites ye to upload booty (files): {{.URL}}\n\n{{.Message}}"
+    },
+    "reverse_completed": {
+      "subject": "Booty (files) uploaded for ye",
+      "body": "{{.SenderName}} uploaded booty (files) for ye: {{.URL}}\n\nShare: {{.ShareName}}"
+    },
+    "welcome": {
+      "subject": "Welcome aboard! Yer {{.ApplicationName}} account be ready",
+      "body": "Ahoy {{.RecipientName}},\n\nAn account was created for ye on {{.ApplicationName}}.\n\nUsername: {{.Username}}\nSign in: {{.LoginURL}}\n\nChoose yer own password here (the link works once and be valid for {{.ExpiresDays}} days):\n{{.SetPasswordURL}}\n\nIf ye did not expect this email, ye can ignore it."
+    }
+  }
+}

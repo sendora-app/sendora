@@ -1,0 +1,126 @@
+# PostgreSQL 18 for the Sendora Cluster flavour (CloudNativePG Cluster), as tested.
+# Adapt: storage class and size, resources, the pod CIDR in pg_hba (10.244.0.0/16 here),
+# and add backups (Barman Cloud plugin). Create the two role Secrets out of band.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: sendora-pg
+  namespace: sendora-postgresql
+spec:
+  instances: 3
+  # Minimal image: smallest attack surface; backups go through the Barman Cloud plugin.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.7-minimal-trixie@sha256:635bfde0a4ce2a04daad754e1ad37fb95ae096c8153b37fe1a4561b5ea417e38
+  primaryUpdateStrategy: unsupervised
+  smartShutdownTimeout: 0
+  enableSuperuserAccess: false
+  enablePDB: true
+
+  # One instance per node; never two copies of the data on the same host.
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname
+
+  storage:
+    # Encrypted local storage per node; not NFS (a failover can stall writes there).
+    storageClass: local-encrypted
+    size: 20Gi
+
+  bootstrap:
+    initdb:
+      database: sendora
+      owner: sendora
+      dataChecksums: true
+      encoding: UTF8
+
+  # Pooler service names are added to the server certificate so clients can
+  # use sslmode=verify-full through PgBouncer.
+  certificates:
+    serverAltDNSNames:
+      - sendora-pg-pooler-rw
+      - sendora-pg-pooler-rw.sendora-postgresql
+      - sendora-pg-pooler-rw.sendora-postgresql.svc
+      - sendora-pg-pooler-rw.sendora-postgresql.svc.cluster.local
+      - sendora-pg-pooler-ro
+      - sendora-pg-pooler-ro.sendora-postgresql
+      - sendora-pg-pooler-ro.sendora-postgresql.svc
+      - sendora-pg-pooler-ro.sendora-postgresql.svc.cluster.local
+
+  # Pods referenced by ${podselector:sendora-poolers} in pg_hba.
+  # If no pod matches, CNPG omits the line and the final reject fails closed.
+  podSelectorRefs:
+    - name: sendora-poolers
+      selector:
+        matchExpressions:
+          - key: cnpg.io/poolerName
+            operator: In
+            values:
+              - sendora-pg-pooler-rw
+              - sendora-pg-pooler-ro
+
+  managed:
+    # Only the read-write and read-only services; no "any instance" service.
+    services:
+      disabledDefaultServices:
+        - r
+    # Sendora service roles. Passwords live in Secrets created out of band (never committed).
+    roles:
+      - name: sendora_provisioner
+        ensure: present
+        login: true
+        createdb: true
+        createrole: true
+        superuser: false
+        replication: false
+        passwordSecret:
+          name: sendora-pg-provisioner
+      - name: sendora_monitor
+        ensure: present
+        login: true
+        superuser: false
+        inRoles:
+          - pg_monitor
+        passwordSecret:
+          name: sendora-pg-monitor
+
+  postgresql:
+    # Quorum sync replication: a commit is acknowledged only after it reached
+    # at least one standby, so a primary loss never loses committed data.
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      password_encryption: scram-sha-256
+      ssl_min_protocol_version: TLSv1.3
+      max_connections: "250"
+      shared_buffers: 64MB
+      log_connections: "on"
+      log_disconnections: "on"
+      log_line_prefix: "%m [%p] %q%u@%d "
+      log_lock_waits: "on"
+      log_statement: ddl
+      # Cluster-wide fallback for the per-role temp_file_limit.
+      temp_file_limit: 1GB
+      # Detect dead peers quickly during failover.
+      tcp_keepalives_idle: "30"
+      tcp_keepalives_interval: "10"
+      tcp_keepalives_count: "3"
+      tcp_user_timeout: "30000"
+    # Evaluated after CNPG's own rules (local peer, streaming_replica and
+    # pooler auth user by certificate) and before its trailing catch-all
+    # 10.244.0.0/16 is the pod CIDR; a NetworkPolicy (networkpolicy.yaml) narrows
+    # direct access to the Sendora controller pods.
+    pg_hba:
+      - hostnossl all all all reject
+      - hostssl all sendora_provisioner 10.244.0.0/16 scram-sha-256
+      - hostssl postgres sendora_monitor 10.244.0.0/16 scram-sha-256
+      - hostssl samerole all ${podselector:sendora-poolers} scram-sha-256
+      - host all all all reject
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      memory: 2Gi

@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "eo",
+  "name": "Esperanto",
+  "templates": {
+    "password_reset": {
+      "subject": "Restarigo de pasvorto",
+      "body": "Restarigu vian pasvorton: {{.URL}}\n\nLa ligilo validas dum 1 horo."
+    },
+    "reverse_completed": {
+      "subject": "Dosieroj alŝutitaj por vi",
+      "body": "{{.SenderName}} alŝutis dosierojn por vi: {{.URL}}\n\nKunhavigo: {{.ShareName}}"
+    },
+    "reverse_invite": {
+      "subject": "{{.SenderName}} invitas vin alŝuti dosierojn",
+      "body": "Saluton {{.RecipientName}},\n\n{{.SenderName}} invitas vin alŝuti dosierojn: {{.URL}}\n\n{{.Message}}"
+    },
+    "share_created": {
+      "subject": "{{.SenderName}} kunhavigis dosierojn kun vi",
+      "body": "Saluton {{.RecipientName}},\n\n{{.SenderName}} kunhavigis dosierojn kun vi: {{.URL}}\n\n{{.Message}}\n\nEksvalidiĝas: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "Elŝuto de via kunhavigo komenciĝis",
+      "body": "Elŝuto de via kunhavigo \"{{.ShareName}}\" komenciĝis.\n\nDosieroj: {{.FileNames}}\nKomenciĝis je: {{.StartedAt}}\nNombro de elŝutoj: {{.DownloadCount}}\n\nĈi tio registras la komencon de la dosierservado, ne finitan transigon nek konfirmon, ke la ricevanto konservis aŭ legis la dosierojn."
+    },
+    "share_expiring": {
+      "subject": "Kunhavigo baldaŭ eksvalidiĝos",
+      "body": "Via kunhavigo \"{{.ShareName}}\" eksvalidiĝos je {{.Expires}}: {{.URL}}"
+    },
+    "verify_email": {
+      "subject": "Kontrolu vian retpoŝtadreson",
+      "body": "Via kontrolkodo estas {{.Code}}"
+    },
+    "welcome": {
+      "subject": "Via konto ĉe {{.ApplicationName}} estas preta",
+      "body": "Saluton {{.RecipientName}},\n\nKonto estis kreita por vi ĉe {{.ApplicationName}}.\n\nUzantnomo: {{.Username}}\nEnsaluti: {{.LoginURL}}\n\nElektu vian propran pasvorton ĉi tie (la ligilo funkcias unufoje kaj validas dum {{.ExpiresDays}} tagoj):\n{{.SetPasswordURL}}\n\nSe vi ne atendis ĉi tiun retmesaĝon, vi povas ignori ĝin."
+    }
+  }
+}

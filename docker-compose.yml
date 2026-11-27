@@ -1,0 +1,39 @@
+services:
+  sendora:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      # APP_URL: https://files.example.com   # public URL used in links/emails/OIDC callbacks
+      # JWT_SECRET: <at least 32 random characters>  # optional; auto-generated and stored in DB otherwise
+      SENDORA_DB_KEY_FILE: /run/secrets/sendora_db_key
+      # Set true only for private first initialization, then recreate with false.
+      SENDORA_DB_INITIALIZE: "${SENDORA_DB_INITIALIZE:-false}"
+      TZ: UTC
+      # Any admin setting can be set here as SENDORA_<SETTING>, e.g.
+      # SENDORA_ALLOW_SELF_REGISTRATION: "false"  (see docs/configuration.md)
+    volumes:
+      - ./sendora-data:/data
+    secrets:
+      - sendora_db_key
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Resource limits: enough for normal use; raise mem_limit for very large
+    # database imports or many parallel transfers.
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 200
+
+secrets:
+  sendora_db_key:
+    # External raw 32-byte file; never commit the key or place it in /data.
+    # Local-file secrets preserve host ownership/mode on Linux. Compose cannot
+    # remap them via uid/gid/mode: provision root or UID 10001 ownership and
+    # mode 0400 (UID 10001) or 0440 (root, group 10001) on the host first.
+    file: "${SENDORA_DB_KEY_HOST_FILE:-${HOME}/.config/sendora/database.key}"

@@ -1,0 +1,35 @@
+{{- if eq .Values.flavour "cluster" }}
+{{- range $comp := list "web" "controller" }}
+{{- $cfg := index $.Values.cluster $comp }}
+{{- if $cfg.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include (printf "sendora.%sName" $comp) $ }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" $ "component" $comp) | nindent 4 }}
+spec:
+  {{- if hasKey $cfg.pdb "maxUnavailable" }}
+  maxUnavailable: {{ $cfg.pdb.maxUnavailable }}
+  {{- else }}
+  minAvailable: {{ $cfg.pdb.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sendora.selectorLabels" (dict "ctx" $ "component" $comp) | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- else if .Values.app.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sendora.fullname" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "app") | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "sendora.selectorLabels" (dict "ctx" . "component" "app") | nindent 6 }}
+{{- end }}

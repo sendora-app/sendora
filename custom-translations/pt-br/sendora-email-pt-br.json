@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "pt-br",
+  "name": "Português (Brasil)",
+  "templates": {
+    "share_created": {
+      "subject": "{{.SenderName}} compartilhou arquivos com você",
+      "body": "Olá, {{.RecipientName}},\n\n{{.SenderName}} compartilhou arquivos com você: {{.URL}}\n\n{{.Message}}\n\nExpira em: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "Um download do seu compartilhamento foi iniciado",
+      "body": "Um download do seu compartilhamento \"{{.ShareName}}\" foi iniciado.\n\nArquivos: {{.FileNames}}\nIniciado em: {{.StartedAt}}\nNúmero de downloads: {{.DownloadCount}}\n\nIsto registra o início do envio dos arquivos, não uma transferência concluída nem a confirmação de que o destinatário salvou ou leu os arquivos."
+    },
+    "share_expiring": {
+      "subject": "Compartilhamento expira em breve",
+      "body": "Seu compartilhamento \"{{.ShareName}}\" expira em {{.Expires}}: {{.URL}}"
+    },
+    "password_reset": {
+      "subject": "Redefinição de senha",
+      "body": "Redefina sua senha: {{.URL}}\n\nO link é válido por 1 hora."
+    },
+    "verify_email": {
+      "subject": "Confirme seu e-mail",
+      "body": "Seu código de verificação é {{.Code}}"
+    },
+    "reverse_invite": {
+      "subject": "{{.SenderName}} convidou você para enviar arquivos",
+      "body": "Olá, {{.RecipientName}},\n\n{{.SenderName}} convidou você para enviar arquivos: {{.URL}}\n\n{{.Message}}"
+    },
+    "reverse_completed": {
+      "subject": "Arquivos enviados para você",
+      "body": "{{.SenderName}} enviou arquivos para você: {{.URL}}\n\nCompartilhamento: {{.ShareName}}"
+    },
+    "welcome": {
+      "subject": "Sua conta no {{.ApplicationName}} está pronta",
+      "body": "Olá, {{.RecipientName}},\n\nUma conta foi criada para você no {{.ApplicationName}}.\n\nNome de usuário: {{.Username}}\nEntrar: {{.LoginURL}}\n\nEscolha sua própria senha aqui (o link funciona uma única vez e é válido por {{.ExpiresDays}} dias):\n{{.SetPasswordURL}}\n\nSe você não esperava este e-mail, pode ignorá-lo."
+    }
+  }
+}

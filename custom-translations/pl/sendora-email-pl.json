@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "pl",
+  "name": "Polski",
+  "templates": {
+    "share_created": {
+      "subject": "{{.SenderName}} udostępnia Ci pliki",
+      "body": "Cześć {{.RecipientName}},\n\n{{.SenderName}} udostępnia Ci pliki: {{.URL}}\n\n{{.Message}}\n\nWygasa: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "Rozpoczęto pobieranie Twojego udostępnienia",
+      "body": "Rozpoczęto pobieranie Twojego udostępnienia „{{.ShareName}}”.\n\nPliki: {{.FileNames}}\nRozpoczęto: {{.StartedAt}}\nLiczba pobrań: {{.DownloadCount}}\n\nTo powiadomienie odnotowuje rozpoczęcie wysyłania plików, a nie zakończony transfer ani potwierdzenie, że odbiorca zapisał lub przeczytał pliki."
+    },
+    "share_expiring": {
+      "subject": "Udostępnienie wkrótce wygaśnie",
+      "body": "Twoje udostępnienie „{{.ShareName}}” wygasa {{.Expires}}: {{.URL}}"
+    },
+    "password_reset": {
+      "subject": "Resetowanie hasła",
+      "body": "Zresetuj hasło: {{.URL}}\n\nLink jest ważny przez 1 godzinę."
+    },
+    "verify_email": {
+      "subject": "Zweryfikuj adres e-mail",
+      "body": "Twój kod weryfikacyjny to {{.Code}}"
+    },
+    "reverse_invite": {
+      "subject": "{{.SenderName}} zaprasza Cię do przesłania plików",
+      "body": "Cześć {{.RecipientName}},\n\n{{.SenderName}} zaprasza Cię do przesłania plików: {{.URL}}\n\n{{.Message}}"
+    },
+    "reverse_completed": {
+      "subject": "Przesłano Ci pliki",
+      "body": "{{.SenderName}} przesyła Ci pliki: {{.URL}}\n\nUdostępnienie: {{.ShareName}}"
+    },
+    "welcome": {
+      "subject": "Twoje konto w {{.ApplicationName}} jest gotowe",
+      "body": "Cześć {{.RecipientName}},\n\nW {{.ApplicationName}} utworzono dla Ciebie konto.\n\nNazwa użytkownika: {{.Username}}\nLogowanie: {{.LoginURL}}\n\nUstaw własne hasło tutaj (link działa jeden raz, a liczba dni ważności to {{.ExpiresDays}}):\n{{.SetPasswordURL}}\n\nJeśli nie spodziewasz się tej wiadomości, możesz ją zignorować."
+    }
+  }
+}

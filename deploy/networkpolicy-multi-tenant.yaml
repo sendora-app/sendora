@@ -1,0 +1,109 @@
+# Recommended NetworkPolicies for the multi-tenant manifest (deploy/kubernetes-multi-tenant.yaml). Not
+# applied by that manifest: they only work when your CNI enforces NetworkPolicy (Cilium, Calico, Antrea, ...).
+# On a CNI that does not (kindnet, plain Flannel, ...) Kubernetes accepts them and silently ignores them,
+# so check that yours enforces them before relying on them. Restricting egress matters more here: tenant
+# administrators choose SMTP, OIDC and webhook targets (docs/THREAT-MODEL.md).
+#
+# Apply after the manifest, once you have replaced the ingress-controller namespace placeholder:
+#   kubectl apply -f deploy/networkpolicy-multi-tenant.yaml
+---
+# Deny all traffic in the namespace by default; the policy below opens only
+# what Sendora needs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/part-of: sendora
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sendora
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/instance: sendora
+    app.kubernetes.io/part-of: sendora
+spec:
+  podSelector:
+    matchLabels:
+      app: sendora
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only the ingress controller (or Gateway API implementation) reaches
+    # Sendora, for every tenant host and admin.<base domain>. kubelet probes and
+    # kubectl port-forward are not affected on common CNIs. Cilium's built-in
+    # Ingress/Gateway sends from a reserved identity instead of a namespace: use
+    # a CiliumNetworkPolicy (fromEntities: ingress) in that case.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              # >>> PLACEHOLDER: the namespace of YOUR ingress controller or gateway <<<
+              kubernetes.io/metadata.name: ingress-controller-namespace
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS through the cluster DNS (CoreDNS keeps the k8s-app: kube-dns label);
+    # also used for the TXT lookups that verify tenants' custom domains.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # HTTPS: tenants' sign-in providers (Entra ID, Google, OIDC), audit
+    # webhooks, and object storage on 443 (the platform bucket and tenants' own
+    # S3, Azure Blob Storage, Google Cloud Storage, R2, Wasabi, B2). Any address
+    # except link-local (cloud metadata service).
+    # Tenants choose their own storage and SMTP servers: a tenant's store on
+    # another port (for example MinIO on 9000), a syslog target (6514) or an
+    # SMTP relay on port 25 needs an extra egress rule here. Opening egress
+    # wider does not open the platform's network to tenants: Sendora's SSRF
+    # guard still refuses loopback, private (RFC 1918, ULA), link-local, CGNAT
+    # and metadata addresses for every target a tenant configures, unless a
+    # platform administrator allows private targets for that tenant.
+    # A platform bucket on MinIO inside the cluster needs its own rule to that
+    # namespace and port; GKE workload identity needs 169.254.169.254/32 TCP 80
+    # (blocked by the except below).
+    # IPv6 clusters: add an ipBlock for ::/0 here and in the SMTP rule.
+    # An ipBlock covers addresses outside the cluster only: a sign-in provider,
+    # object store or mail server running in this cluster (Keycloak, MinIO, ...)
+    # needs its own rule with a namespaceSelector/podSelector (verified on Cilium).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    # SMTP submission: the platform SMTP server and tenants' own mail servers,
+    # 587 (STARTTLS) and 465 (implicit TLS). Narrow the ipBlock if every tenant
+    # uses the platform SMTP server.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 587
+        - protocol: TCP
+          port: 465

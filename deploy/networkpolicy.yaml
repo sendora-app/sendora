@@ -1,0 +1,127 @@
+# Recommended NetworkPolicies for the single-instance manifest (deploy/kubernetes.yaml). Not applied by
+# that manifest: they only work when your CNI enforces NetworkPolicy (Cilium, Calico, Antrea, ...). On a CNI
+# that does not (kindnet, plain Flannel, ...) Kubernetes accepts them and silently ignores them, so check
+# that yours enforces them before relying on them.
+#
+# Apply after the manifest, once you have replaced the ingress-controller namespace placeholder:
+#   kubectl apply -f deploy/networkpolicy.yaml
+---
+# Default deny: no traffic in or out of the namespace except what is listed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/part-of: sendora
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sendora
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/instance: sendora
+    app.kubernetes.io/part-of: sendora
+spec:
+  podSelector:
+    matchLabels:
+      app: sendora
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only the reverse proxy reaches Sendora: your ingress controller or Gateway
+    # API implementation (for example Traefik, HAProxy, Envoy Gateway, Istio).
+    # kubelet probes and kubectl port-forward are not affected by NetworkPolicy
+    # on common CNIs. Some CNIs (e.g. Cilium with its built-in Gateway or
+    # Ingress) send this traffic from the node or a reserved identity instead of
+    # a namespace; use that CNI's own policy (CiliumNetworkPolicy fromEntities:
+    # ingress) in that case.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              # >>> PLACEHOLDER: the namespace of YOUR ingress controller or gateway <<<
+              kubernetes.io/metadata.name: ingress-controller-namespace
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS through the cluster DNS (CoreDNS keeps the k8s-app: kube-dns label).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # HTTPS to the OpenID Connect identity providers (Microsoft Entra ID,
+    # Google, ...). Their addresses change, so any address except link-local
+    # (cloud metadata service). Remove this rule if you use no login provider.
+    # This rule also covers object storage on 443 (AWS S3, Azure Blob Storage,
+    # Google Cloud Storage, R2, Wasabi, B2): keep it when storage_backend is not
+    # local. MinIO or another store on another port (e.g. 9000) needs its own
+    # egress rule; GKE workload identity also needs the metadata server
+    # (169.254.169.254/32, TCP 80), which the except below blocks.
+    # IPv6 clusters: add an ipBlock for ::/0 here and in the SMTP rule.
+    # An ipBlock covers addresses outside the cluster only: a sign-in provider,
+    # object store or mail server running in this cluster (Keycloak, MinIO, ...)
+    # needs its own rule with a namespaceSelector/podSelector (verified on Cilium).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    # SMTP submission for emails: 587 (STARTTLS) and 465 (implicit TLS).
+    # Narrow the ipBlock to your mail server, or remove the rule without SMTP.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 587
+        - protocol: TCP
+          port: 465
+# Optional Ingress: uncomment only after private first-run setup and configuring
+# your controller, DNS, canonical APP_URL, and sendora-tls TLS Secret.
+# Configure HTTPS redirects and upload/download limits in your controller.
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: sendora
+#   namespace: sendora
+# spec:
+#   ingressClassName: nginx # Replace with your installed controller's class.
+#   tls:
+#     - hosts:
+#         - sendora.example.com
+#       secretName: sendora-tls
+#   rules:
+#     - host: sendora.example.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: sendora
+#                 port:
+#                   name: http

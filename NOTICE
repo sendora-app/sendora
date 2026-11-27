@@ -1,0 +1,29 @@
+Sendora
+Copyright (C) 2026 Sendora contributors
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version, together with the additional terms permitted by section 7 of
+that license that are set out in LICENSE-ADDITIONAL-TERMS.md.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program (the file LICENSE). If not, see <https://www.gnu.org/licenses/>.
+
+Source code: https://github.com/sendora-app/sendora
+Trademarks: the name "Sendora" and the Sendora logo are covered by TRADEMARKS.md.
+
+Earlier releases
+----------------
+Sendora versions up to and including 0.2.0 were released under the MIT License.
+Those releases, and copies obtained under them, remain available under the MIT
+License; this change does not withdraw or alter that grant. Starting with
+version 0.2.1, Sendora is licensed under AGPL-3.0-or-later as described above.
+
+Third-party components keep their own licenses; see THIRD_PARTY_NOTICES.md.

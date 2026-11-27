@@ -1,0 +1,21 @@
+# Caddy obtains and renews the certificate for SENDORA_DOMAIN automatically.
+{$SENDORA_DOMAIN} {
+	encode zstd gzip
+	# Uploads arrive in 8 MB chunks; the database import (Admin -> Backups) sends
+	# the whole backup in one request of up to 4 GiB.
+	@import path /api/backups/import
+	@other not path /api/backups/import
+	request_body @other {
+		max_size 100MB
+	}
+	request_body @import {
+		max_size 4GB
+	}
+	# Long downloads must not time out.
+	reverse_proxy sendora:8080 {
+		transport http {
+			read_timeout 10m
+			write_timeout 0
+		}
+	}
+}

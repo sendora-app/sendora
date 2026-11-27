@@ -1,0 +1,146 @@
+# Bare-minimum Sendora on Kubernetes for a first try (docs/quickstart-kubernetes.md).
+# For production use deploy/kubernetes.yaml and https://github.com/sendora-app/sendora/wiki/Kubernetes-Deployment instead.
+#
+#   kubectl create namespace sendora
+#   kubectl -n sendora create secret generic sendora-db-key --from-file=database.key=./database.key
+#   kubectl apply -f deploy/kubernetes-minimal.yaml
+#   kubectl -n sendora logs deploy/sendora | grep "setup code"
+#   kubectl -n sendora port-forward svc/sendora 8080:80     # then open http://localhost:8080
+#
+# Meets the Pod Security Standard "baseline" (the volume-owner init container
+# runs as root to chown the volume). The full manifest meets "restricted".
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sendora-data
+  namespace: sendora
+spec:
+  # No storageClassName: uses the cluster's default StorageClass. Without one, set
+  # it here (kubectl get storageclass) or create a matching PersistentVolume
+  # (see docs/quickstart-kubernetes.md).
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 2Gi # enough for a first try; Sendora's quota is the real limit
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sendora
+  namespace: sendora
+spec:
+  replicas: 1 # never more: Sendora is a single-instance application
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sendora
+  template:
+    metadata:
+      labels:
+        app: sendora
+    spec:
+      automountServiceAccountToken: false # Sendora does not use the Kubernetes API
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      # Quick-start convenience: make the volume owned by the app user. The full
+      # manifest leaves this to the storage administrator instead of running as root.
+      initContainers:
+        - name: volume-owner
+          image: busybox:1.36.1
+          command:
+            - "sh"
+            - "-c"
+            - "chown 10001:10001 /data && chmod 700 /data"
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - "ALL"
+              add:
+                - "CHOWN"
+                - "FOWNER"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: sendora
+          image: ghcr.io/sendora-app/sendora:0.3.0
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SENDORA_DB_KEY_FILE
+              value: /run/secrets/sendora/database.key
+            # "true" only for the first start of a new, empty volume; set it to
+            # "false" afterwards (see the quick start).
+            - name: SENDORA_DB_INITIALIZE
+              value: "true"
+            # No APP_URL here: through kubectl port-forward Sendora then accepts
+            # whatever local address you open (localhost or 127.0.0.1, any port).
+            # Set APP_URL to the public https:// address once you add an Ingress.
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: database-key
+              mountPath: /run/secrets/sendora
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: sendora-data
+        - name: database-key
+          secret:
+            secretName: sendora-db-key
+            defaultMode: 0440
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sendora
+  namespace: sendora
+spec:
+  selector:
+    app: sendora
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

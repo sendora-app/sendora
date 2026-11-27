@@ -1,0 +1,95 @@
+{{- if eq .Values.flavour "cluster" }}
+{{- $c := .Values.cluster }}
+{{- $cfg := $c.controller }}
+{{- $port := int $c.keyEndpoint.port }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sendora.controllerName" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 4 }}
+spec:
+  replicas: {{ $cfg.replicas }}
+  strategy:
+    type: RollingUpdate
+    {{- toYaml (dict "rollingUpdate" $cfg.strategy.rollingUpdate) | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "sendora.selectorLabels" (dict "ctx" . "component" "controller") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 8 }}
+        {{- with $cfg.podLabels }}{{ toYaml . | nindent 8 }}{{ end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with $cfg.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+    spec:
+      serviceAccountName: {{ include "sendora.controllerServiceAccount" . }}
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      {{- include "sendora.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        {{- include "sendora.podSecurityContext" . | nindent 8 }}
+      terminationGracePeriodSeconds: {{ $cfg.terminationGracePeriodSeconds }}
+      {{- include "sendora.podScheduling" (dict "ctx" . "cfg" $cfg) | nindent 6 }}
+      {{- include "sendora.topologySpread" (dict "ctx" . "component" "controller" "cfg" $cfg) | nindent 6 }}
+      {{- include "sendora.volumeOwnerInit" . | nindent 6 }}
+      containers:
+        - name: controller
+          image: {{ include "sendora.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "sendora.containerSecurityContext" . | nindent 12 }}
+          ports:
+            - { name: keys, containerPort: {{ $port }} }
+            - { name: http, containerPort: 8080 }
+          envFrom:
+            - configMapRef: { name: {{ include "sendora.configName" . }} }
+            {{- with .Values.extraEnvFrom }}{{ toYaml . | nindent 12 }}{{ end }}
+          env:
+            - { name: SENDORA_ROLE, value: controller }
+            {{- include "sendora.clusterCommonEnv" . | nindent 12 }}
+            - { name: SENDORA_PG_DIRECT, value: {{ $c.postgres.direct | quote }} }
+            - { name: SENDORA_PG_PROVISIONER_DIR, value: /etc/pg-prov }
+            - { name: SENDORA_DB_KEY_FILE, value: {{ include "sendora.keyFilePath" (dict "ctx" . "dir" "/etc/sendora-key") | quote }} }
+            - { name: SENDORA_KEY_JOB_CONCURRENCY, value: {{ .Values.keys.jobConcurrency | quote }} }
+            - { name: SENDORA_KEY_ADDR, value: {{ printf ":%d" $port | quote }} }
+            - { name: SENDORA_KEY_TLS_CERT, value: /etc/sendora-keys-tls/tls.crt }
+            - { name: SENDORA_KEY_TLS_KEY, value: /etc/sendora-keys-tls/tls.key }
+            - { name: SENDORA_KEY_USER, value: {{ default (printf "system:serviceaccount:%s:%s" .Release.Namespace (include "sendora.webServiceAccount" .)) $c.keyEndpoint.user | quote }} }
+            {{- with .Values.extraEnv }}{{ toYaml . | nindent 12 }}{{ end }}
+          resources:
+            {{- toYaml $cfg.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            {{- toYaml $c.probes.readiness | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            {{- toYaml $c.probes.liveness | nindent 12 }}
+          volumeMounts:
+            - { name: files, mountPath: /data }
+            - { name: key, mountPath: /etc/sendora-key, readOnly: true }
+            - { name: keys-tls, mountPath: /etc/sendora-keys-tls, readOnly: true }
+            - { name: prov, mountPath: /etc/pg-prov, readOnly: true }
+            {{- include "sendora.pgCAMount" . | nindent 12 }}
+            - { name: tmp, mountPath: /tmp }
+            {{- with .Values.extraVolumeMounts }}{{ toYaml . | nindent 12 }}{{ end }}
+      volumes:
+        {{- include "sendora.dataVolume" . | nindent 8 }}
+        - name: key
+          secret: { secretName: {{ include "sendora.keySecretName" . }}, defaultMode: 0400 }
+        - name: keys-tls
+          secret:
+            secretName: {{ include "sendora.keysTLSSecretName" . }}
+            defaultMode: 0400
+            items:
+              - { key: tls.crt, path: tls.crt }
+              - { key: tls.key, path: tls.key }
+        - name: prov
+          secret: { secretName: {{ $c.postgres.provisionerSecret.name }}, defaultMode: 0400 }
+        {{- include "sendora.pgCAVolume" . | nindent 8 }}
+        - name: tmp
+          emptyDir: { sizeLimit: {{ .Values.tmp.sizeLimit }} }
+        {{- with .Values.extraVolumes }}{{ toYaml . | nindent 8 }}{{ end }}
+{{- end }}

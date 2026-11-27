@@ -1,0 +1,30 @@
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "sendora.pvcName" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "data") | nindent 4 }}
+  {{- if or .Values.persistence.keep .Values.persistence.annotations }}
+  annotations:
+    {{- if .Values.persistence.keep }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+    {{- with .Values.persistence.annotations }}{{ toYaml . | nindent 4 }}{{ end }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- if .Values.persistence.accessModes }}
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+    {{- else if eq .Values.flavour "cluster" }}
+    - ReadWriteMany
+    {{- else }}
+    - ReadWriteOnce
+    {{- end }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ if eq .Values.persistence.storageClass "-" }}""{{ else }}{{ .Values.persistence.storageClass }}{{ end }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}

@@ -1,0 +1,293 @@
+# Illustrative single-instance deployment; read the README before applying.
+# Replace the placeholder image and APP_URL with values you control.
+# The storage provisioner/administrator must make /data and restored files
+# owned by UID 10001: fsGroup alone does not grant permission to chmod them.
+#
+# Meets the Pod Security Standard "restricted" (enforced on the namespace below).
+# NetworkPolicies are recommended but not applied here: they depend on your CNI.
+# See deploy/networkpolicy.yaml.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Sendora does not talk to the Kubernetes API: its own account, no token.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sendora
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/instance: sendora
+    app.kubernetes.io/part-of: sendora
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sendora-data
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/instance: sendora
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: sendora
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # Omitted storageClassName uses the cluster default; select a suitable class.
+  resources:
+    requests:
+      storage: 100Gi
+---
+# Settings of Admin -> Settings as configuration (see https://github.com/sendora-app/sendora/wiki/Configuration):
+# values here win at every start and are read-only in the admin screen.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sendora-config
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/instance: sendora
+    app.kubernetes.io/part-of: sendora
+data:
+  SENDORA_ALLOW_SELF_REGISTRATION: "false"
+  SENDORA_IDLE_LOGOUT_MINUTES: "60"
+  # SENDORA_SMTP_HOST: smtp.example.com
+  # SENDORA_SMTP_PORT: "587"
+  # SENDORA_SMTP_TLS: starttls
+  # SENDORA_SMTP_USER: sendora@example.com
+  # SENDORA_SMTP_FROM: Sendora <sendora@example.com>
+  # SENDORA_PROVIDER_ENTRA_TYPE: entra
+  # SENDORA_PROVIDER_ENTRA_NAME: Company login
+  # SENDORA_PROVIDER_ENTRA_TENANT_ID: 00000000-0000-0000-0000-000000000000
+  # SENDORA_PROVIDER_ENTRA_CLIENT_ID: 00000000-0000-0000-0000-000000000000
+  # SENDORA_PROVIDER_ENTRA_ALLOW_REGISTRATION: "true"
+  # Object storage for share files (0.2.0 and later, docs/STORAGE.md). Default: local (DATA_DIR).
+  # Files are encrypted before upload; secrets go into sendora-secrets (below).
+  # S3 / S3-compatible:
+  # SENDORA_STORAGE_BACKEND: s3
+  # SENDORA_STORAGE_S3_ENDPOINT: ""            # empty = AWS; e.g. https://s3.eu-central-2.wasabisys.com
+  # SENDORA_STORAGE_S3_REGION: eu-central-1
+  # SENDORA_STORAGE_S3_BUCKET: sendora-files
+  # SENDORA_STORAGE_S3_PREFIX: sendora/
+  # SENDORA_STORAGE_S3_PATH_STYLE: "false"     # "true" for MinIO, R2, B2
+  # SENDORA_STORAGE_S3_AUTH: static            # or default (IRSA, EKS Pod Identity, instance profile)
+  # SENDORA_STORAGE_S3_ACCESS_KEY: AKIA...
+  # Azure Blob Storage:
+  # SENDORA_STORAGE_BACKEND: azure
+  # SENDORA_STORAGE_AZURE_ACCOUNT: sendorafiles
+  # SENDORA_STORAGE_AZURE_CONTAINER: sendora
+  # SENDORA_STORAGE_AZURE_PREFIX: sendora/
+  # SENDORA_STORAGE_AZURE_AUTH: identity       # or shared_key, sas
+  # Google Cloud Storage:
+  # SENDORA_STORAGE_BACKEND: gcs
+  # SENDORA_STORAGE_GCS_BUCKET: sendora-files
+  # SENDORA_STORAGE_GCS_PREFIX: sendora/
+  # SENDORA_STORAGE_GCS_AUTH: default          # or service_account
+  # Also copy the daily (encrypted) database backups to the object store:
+  # SENDORA_BACKUP_REMOTE_ENABLED: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sendora
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/instance: sendora
+    app.kubernetes.io/version: "0.2.0"
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: sendora
+spec:
+  # SQLite and process-local jobs/locks require exactly one live instance.
+  # No PodDisruptionBudget on purpose: with one replica and the Recreate
+  # strategy, a PDB with minAvailable: 1 would only block node drains forever,
+  # and one with maxUnavailable: 1 protects nothing. Plan maintenance windows.
+  replicas: 1
+  strategy:
+    type: Recreate
+  # The selector is immutable; it stays "app: sendora" so existing deployments
+  # can be updated with kubectl apply.
+  selector:
+    matchLabels:
+      app: sendora
+  template:
+    metadata:
+      labels:
+        app: sendora
+        app.kubernetes.io/name: sendora
+        app.kubernetes.io/instance: sendora
+        app.kubernetes.io/version: "0.2.0"
+        app.kubernetes.io/component: server
+        app.kubernetes.io/part-of: sendora
+    spec:
+      serviceAccountName: sendora
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      # The volume root must be owned by UID 10001 (Sendora restricts it to 0700).
+      # Storage that cannot do that, such as hostPath/local-path on kind, minikube
+      # or k3s, fails with "chmod /data: operation not permitted". There, uncomment
+      # this one-time ownership fix; it runs as root, which a "restricted" Pod
+      # Security level does not allow.
+      # initContainers:
+      #   - name: volume-owner
+      #     image: busybox:1.36.1
+      #     command: ["sh", "-c", "chown 10001:10001 /data && chmod 700 /data"]
+      #     securityContext:
+      #       runAsUser: 0
+      #       runAsNonRoot: false
+      #     volumeMounts:
+      #       - name: data
+      #         mountPath: /data
+      containers:
+        - name: sendora
+          # Published release image (pin a version or digest; see the releases on GitHub).
+          # Digest-pinned form (immune to a moved tag; verify the signature first,
+          # see SECURITY.md):
+          #   image: ghcr.io/sendora-app/sendora:0.3.0@sha256:<digest of the release>
+          image: ghcr.io/sendora-app/sendora:0.3.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: DATA_DIR
+              value: /data
+            - name: SENDORA_DB_KEY_FILE
+              value: /run/secrets/sendora/database.key
+            # Enable only for private first initialization, then set false.
+            - name: SENDORA_DB_INITIALIZE
+              value: "false"
+            - name: APP_URL
+              value: https://sendora.example.com
+            - name: TZ
+              value: UTC
+            # Secrets as files from the sendora-secrets Secret (create it first):
+            # - name: SENDORA_SMTP_PASSWORD_FILE
+            #   value: /run/secrets/sendora-config/smtp-password
+            # - name: SENDORA_PROVIDER_ENTRA_CLIENT_SECRET_FILE
+            #   value: /run/secrets/sendora-config/entra-client-secret
+            # Object storage secrets (only the one of your backend and auth mode):
+            # - name: SENDORA_STORAGE_S3_SECRET_KEY_FILE
+            #   value: /run/secrets/sendora-config/s3-secret-key
+            # - name: SENDORA_STORAGE_AZURE_ACCOUNT_KEY_FILE
+            #   value: /run/secrets/sendora-config/azure-account-key
+            # - name: SENDORA_STORAGE_AZURE_SAS_TOKEN_FILE
+            #   value: /run/secrets/sendora-config/azure-sas-token
+            # - name: SENDORA_STORAGE_GCS_CREDENTIALS_JSON_FILE
+            #   value: /run/secrets/sendora-config/gcs-key.json
+          envFrom:
+            - configMapRef:
+                name: sendora-config
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+              # Covers the 1Gi /tmp emptyDir plus container logs.
+              ephemeral-storage: 2Gi
+          # All probes use /api/health. From 0.1.5 on, /api/health/ready can be
+          # used for the readinessProbe instead.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: database-key
+              mountPath: /run/secrets/sendora
+              readOnly: true
+            # - name: config-secrets
+            #   mountPath: /run/secrets/sendora-config
+            #   readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: sendora-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        # Create sendora-db-key separately from a raw key file; no key in YAML.
+        # Projected root-owned mode 0440 is readable through fsGroup 10001.
+        - name: database-key
+          secret:
+            secretName: sendora-db-key
+            defaultMode: 0440
+            items:
+              - key: database.key
+                path: database.key
+        # kubectl -n sendora create secret generic sendora-secrets \
+        #   --from-file=smtp-password=./smtp-password --from-file=entra-client-secret=./entra-secret
+        #   (add --from-file=s3-secret-key=./s3-secret-key etc. for object storage)
+        # - name: config-secrets
+        #   secret:
+        #     secretName: sendora-secrets
+        #     defaultMode: 0440
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sendora
+  namespace: sendora
+  labels:
+    app.kubernetes.io/name: sendora
+    app.kubernetes.io/instance: sendora
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: sendora
+spec:
+  type: ClusterIP
+  selector:
+    app: sendora
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

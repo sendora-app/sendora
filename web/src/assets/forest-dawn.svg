@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1200" viewBox="0 0 1920 1200">
+<!-- Original Sendora illustration, MIT licensed. Forest at first light. -->
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#173f39"/><stop offset=".45" stop-color="#87a99a"/><stop offset=".8" stop-color="#d3dac1"/><stop offset="1" stop-color="#244d40"/></linearGradient>
+ <radialGradient id="sun"><stop stop-color="#fff8d7" stop-opacity=".95"/><stop offset=".3" stop-color="#fff2c1" stop-opacity=".55"/><stop offset="1" stop-color="#eee8c0" stop-opacity="0"/></radialGradient>
+ <linearGradient id="mist" x2="0" y2="1"><stop stop-color="#dde5d4" stop-opacity="0"/><stop offset=".5" stop-color="#e0e7d6" stop-opacity=".65"/><stop offset="1" stop-color="#d5dfca" stop-opacity="0"/></linearGradient>
+ <linearGradient id="ground" x2="0" y2="1"><stop stop-color="#55795a"/><stop offset="1" stop-color="#102e29"/></linearGradient>
+ <linearGradient id="beam" x2="0" y2="1"><stop stop-color="#fff6ce" stop-opacity=".3"/><stop offset="1" stop-color="#fff6ce" stop-opacity="0"/></linearGradient>
+ <filter id="soft"><feGaussianBlur stdDeviation="28"/></filter>
+ <filter id="haze"><feGaussianBlur stdDeviation="9"/></filter>
+ <g id="pine"><path d="M-6 0h12l-2-570h-8z"/><path d="M0-650l-55 120h30l-75 135h45l-90 145h62l-104 130H187L83-250h62L55-395h45L25-530h30z"/></g>
+ <g id="trunk"><path d="M-22 0L-12-1200h25L25 0z"/><path d="M0-650l-100-110-90-40 96 23 95 86 100-140 95-48-86 64-104 170zm0-265l-60-130-98-75 114 61 50 91 110-130-92 146z"/></g>
+</defs>
+<path fill="url(#sky)" d="M0 0h1920v1200H0z"/>
+<g fill="#507b6b" opacity=".35" filter="url(#haze)"><use href="#pine" transform="translate(90 890) scale(.9 1.4)"/><use href="#pine" transform="translate(320 890) scale(.7 1.3)"/><use href="#pine" transform="translate(590 900) scale(.7 1.2)"/><use href="#pine" transform="translate(820 880) scale(.5 1.4)"/><use href="#pine" transform="translate(1050 870) scale(.65 1.2)"/><use href="#pine" transform="translate(1390 880) scale(.65 1.5)"/><use href="#pine" transform="translate(1680 900) scale(.8 1.3)"/><use href="#pine" transform="translate(1870 890) scale(.7 1.4)"/></g>
+<g fill="#416958" opacity=".48"><use href="#trunk" transform="translate(170 1000) scale(.6 1)"/><use href="#trunk" transform="translate(410 950) scale(.5 .9)"/><use href="#trunk" transform="translate(740 970) scale(.5 1)"/><use href="#trunk" transform="translate(1170 960) scale(.4 1)"/><use href="#trunk" transform="translate(1510 980) scale(.65 1)"/><use href="#trunk" transform="translate(1750 990) scale(.7 1)"/></g>
+<ellipse cx="1160" cy="370" rx="700" ry="610" fill="url(#sun)"/>
+<g fill="url(#beam)" filter="url(#soft)"><path d="M1130 220L440 1160h240l500-940z"/><path d="M1190 220l90 980h250L1230 220z"/><path d="M1130 280L800 1200h100l280-920z"/></g>
+<path d="M0 865Q380 820 720 895T1400 860T1920 910v290H0z" fill="url(#ground)"/>
+<path d="M1110 845Q980 950 1170 1040T1350 1200h-320Q1110 1100 950 1030T1110 845" fill="#b9be8d" opacity=".35"/>
+<ellipse cx="1050" cy="825" rx="1250" ry="180" fill="url(#mist)" filter="url(#soft)"/>
+<g fill="#193b32"><use href="#trunk" transform="translate(70 1200) scale(2 1.15)"/><use href="#trunk" transform="translate(310 1200) scale(1.4 1.2)"/><use href="#trunk" transform="translate(1600 1200) scale(1.4 1.15)"/><use href="#trunk" transform="translate(1850 1200) scale(2 1.2)"/></g>
+<g fill="#153e32" opacity=".9"><ellipse cx="130" cy="50" rx="420" ry="150"/><ellipse cx="470" cy="-15" rx="290" ry="130"/><ellipse cx="1810" cy="35" rx="380" ry="145"/><ellipse cx="1530" cy="-30" rx="250" ry="110"/></g>
+<g fill="#214b35"><path d="M0 1200v-100q90-100 210 10 100-130 200-10 100-85 180 100zm1920 0v-130q-100-60-210 40-80-120-180-20-100-60-190 110z"/></g>
+<path fill="#102b28" opacity=".13" d="M0 0h1920v1200H0z"/>
+</svg>

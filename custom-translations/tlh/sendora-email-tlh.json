@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "tlh",
+  "name": "tlhIngan Hol",
+  "templates": {
+    "password_reset": {
+      "subject": "pegh mu' chu'qa'ghach",
+      "body": "pegh mu'lIj yIchu'qa'moH: {{.URL}}\n\nwa' rep Qap rarwI'."
+    },
+    "reverse_completed": {
+      "subject": "ghItlhmey lablu'pu'",
+      "body": "SoHvaD ghItlhmey lab {{.SenderName}}: {{.URL}}\n\nngeHghach: {{.ShareName}}"
+    },
+    "reverse_invite": {
+      "subject": "ghItlhmey Dalab 'e' rI' {{.SenderName}}",
+      "body": "nuqneH, {{.RecipientName}}!\n\nghItlhmey Dalab 'e' rI' {{.SenderName}}: {{.URL}}\n\n{{.Message}}"
+    },
+    "share_created": {
+      "subject": "SoHvaD ghItlhmey ngeH {{.SenderName}}",
+      "body": "nuqneH, {{.RecipientName}}!\n\nSoHvaD ghItlhmey ngeH {{.SenderName}}: {{.URL}}\n\n{{.Message}}\n\nDor: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "ngeHghachlIj Suqghach taghpu'",
+      "body": "ngeHghachlIj \"{{.ShareName}}\" Suqghach taghpu'.\n\nghItlhmey: {{.FileNames}}\ntagh poH: {{.StartedAt}}\nSuqghach mI': {{.DownloadCount}}\n\nghItlhmey ngeHghach tagh 'agh qonvam; Suqghach rInpu' 'e' tob'be', ghItlhmey pol pagh laD HevwI' 'e' tob'be' je."
+    },
+    "share_expiring": {
+      "subject": "tugh Dor ngeHghach",
+      "body": "ngeHghachlIj \"{{.ShareName}}\" Dor {{.Expires}}: {{.URL}}"
+    },
+    "verify_email": {
+      "subject": "QIn DaqlIj yI'ol",
+      "body": "'olmeH ngoqlIj: {{.Code}}"
+    },
+    "welcome": {
+      "subject": "{{.ApplicationName}} lo'wI' De'lIj ghuSlu'pu'. Qapla'!",
+      "body": "nuqneH, {{.RecipientName}}!\n\n{{.ApplicationName}}Daq SoHvaD lo'wI' De' chenmoHlu'pu'.\n\nlo'wI' pong: {{.Username}}\nyI'el: {{.LoginURL}}\n\nnaDev pegh mu'lIj yIwIv (wa'logh neH Qap rarwI' 'ej {{.ExpiresDays}} jaj Qap):\n{{.SetPasswordURL}}\n\nQInvam DapIHbe'chugh, yIbuSHa'."
+    }
+  }
+}

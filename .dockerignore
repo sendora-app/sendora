@@ -1,0 +1,26 @@
+# Never send local data, secrets or build output into the image build.
+**/data
+# ...except embedded source data (the common-password list).
+!internal/app/data
+**/sendora-data
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.key
+**/*.pem
+**/.env
+**/sendora.env
+**/*recovery*
+**/*.log
+**/*.tmp
+**/*.temp
+**/~*
+**/.DS_Store
+**/node_modules
+web/dist
+.git
+.github
+# Local tooling state (for example agent worktrees with their own data).
+.claude
+.idea
+.vscode

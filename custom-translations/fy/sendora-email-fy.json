@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "fy",
+  "name": "Frysk",
+  "templates": {
+    "share_created": {
+      "subject": "{{.SenderName}} hat bestannen mei dy dield",
+      "body": "Hoi {{.RecipientName}},\n\n{{.SenderName}} hat bestannen mei dy dield: {{.URL}}\n\n{{.Message}}\n\nFerrint: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "In download fan dyn dieling is begûn",
+      "body": "In download fan dyn dieling \"{{.ShareName}}\" is begûn.\n\nBestannen: {{.FileNames}}\nBegûn op: {{.StartedAt}}\nTal downloads: {{.DownloadCount}}\n\nDit leit it begjin fan it ferstjoeren fan de bestannen fêst, net in foltôge oerdracht of in befêstiging dat de ûntfanger de bestannen bewarre of lêzen hat."
+    },
+    "share_expiring": {
+      "subject": "Dieling ferrint gau",
+      "body": "Dyn dieling \"{{.ShareName}}\" ferrint op {{.Expires}}: {{.URL}}"
+    },
+    "password_reset": {
+      "subject": "Wachtwurd weromsette",
+      "body": "Set dyn wachtwurd werom: {{.URL}}\n\nDe keppeling is 1 oere jildich."
+    },
+    "verify_email": {
+      "subject": "Befêstigje dyn e-mailadres",
+      "body": "Dyn ferifikaasjekoade is {{.Code}}"
+    },
+    "reverse_invite": {
+      "subject": "{{.SenderName}} noeget dy út om bestannen te uploaden",
+      "body": "Hoi {{.RecipientName}},\n\n{{.SenderName}} noeget dy út om bestannen te uploaden: {{.URL}}\n\n{{.Message}}"
+    },
+    "reverse_completed": {
+      "subject": "Bestannen foar dy uploade",
+      "body": "{{.SenderName}} hat bestannen foar dy uploade: {{.URL}}\n\nDieling: {{.ShareName}}"
+    },
+    "welcome": {
+      "subject": "Dyn {{.ApplicationName}}-account stiet klear",
+      "body": "Hoi {{.RecipientName}},\n\nDer is in account foar dy oanmakke op {{.ApplicationName}}.\n\nBrûkersnamme: {{.Username}}\nOanmelde: {{.LoginURL}}\n\nKies hjir dyn eigen wachtwurd (de keppeling wurket ien kear en is {{.ExpiresDays}} dagen jildich):\n{{.SetPasswordURL}}\n\nAs'st dizze e-mail net ferwachte hast, kinst him negearje."
+    }
+  }
+}

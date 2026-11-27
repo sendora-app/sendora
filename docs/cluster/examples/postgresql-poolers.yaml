@@ -1,0 +1,97 @@
+# PgBouncer poolers for the Sendora Cluster flavour (CloudNativePG Pooler), as tested. Tenant roles
+# (t_<id>_app / t_<id>_ro) may connect only through these pods: pg_hba admits
+# them via ${podselector:sendora-poolers} (postgresql-cluster.yaml).
+# Client side: TLS required, presenting the cluster server certificate (its
+# SANs include the pooler service names). Server side: CNPG's pooler client
+# certificate (cnpg_pooler_pgbouncer, verified CA).
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: sendora-pg-pooler-rw
+  namespace: sendora-postgresql
+spec:
+  cluster:
+    name: sendora-pg
+  instances: 2
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      # Connection budget: 2 + 1 server connections per
+      # (database, user) and pooler instance.
+      default_pool_size: "2"
+      reserve_pool_size: "1"
+      max_db_connections: "3"
+      max_client_conn: "1000"
+      server_idle_timeout: "60"
+      server_check_delay: "10"
+      # Protocol-level prepared statements in transaction mode (pgx cache
+      # stays below this, StatementCacheCapacity = 100).
+      max_prepared_statements: "200"
+      client_tls_sslmode: require
+      tcp_keepalive: "1"
+      tcp_keepidle: "30"
+      tcp_keepintvl: "10"
+      tcp_keepcnt: "3"
+      tcp_user_timeout: "30000"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sendora-pg-pooler
+    spec:
+      containers: []
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    cnpg.io/poolerName: sendora-pg-pooler-rw
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: sendora-pg-pooler-ro
+  namespace: sendora-postgresql
+spec:
+  cluster:
+    name: sendora-pg
+  instances: 2
+  type: ro
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      # Connection budget: 2 + 1 server connections per
+      # (database, user) and pooler instance.
+      default_pool_size: "2"
+      reserve_pool_size: "1"
+      max_db_connections: "3"
+      max_client_conn: "1000"
+      server_idle_timeout: "60"
+      server_check_delay: "10"
+      # Protocol-level prepared statements in transaction mode (pgx cache
+      # stays below this, StatementCacheCapacity = 100).
+      max_prepared_statements: "200"
+      client_tls_sslmode: require
+      tcp_keepalive: "1"
+      tcp_keepidle: "30"
+      tcp_keepintvl: "10"
+      tcp_keepcnt: "3"
+      tcp_user_timeout: "30000"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sendora-pg-pooler
+    spec:
+      containers: []
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    cnpg.io/poolerName: sendora-pg-pooler-ro

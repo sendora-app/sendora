@@ -1,0 +1,72 @@
+# ServiceAccounts and RBAC of the Sendora Cluster flavour, as tested (the Helm chart renders the same).
+# Namespace sendora-cluster; adapt it in every object.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sendora-controller
+  namespace: sendora-cluster
+automountServiceAccountToken: true
+---
+# Leader election: one controller holds the Lease.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sendora-controller-lease
+  namespace: sendora-cluster
+rules:
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - create
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sendora-controller-lease
+  namespace: sendora-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sendora-controller-lease
+subjects:
+  - kind: ServiceAccount
+    name: sendora-controller
+    namespace: sendora-cluster
+---
+# The key endpoint checks the web pods' projected tokens with TokenReview.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sendora-controller-tokenreview
+rules:
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sendora-controller-tokenreview
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: sendora-controller-tokenreview
+subjects:
+  - kind: ServiceAccount
+    name: sendora-controller
+    namespace: sendora-cluster
+---
+# Web pods get no API token; only the projected token for the key endpoint.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sendora-web
+  namespace: sendora-cluster
+automountServiceAccountToken: false

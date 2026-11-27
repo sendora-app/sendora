@@ -1,0 +1,48 @@
+# Sendora with Docker Compose, using the published image.
+#
+#   cp .env.example .env              # version, port, key location
+#   cp sendora.env.example sendora.env  # application settings (optional)
+#   (umask 077; set -C; openssl rand 32 > database.key)   # once; back it up!
+#   docker compose up -d
+#   docker compose logs sendora | grep "setup code"
+#
+# See README.md in this folder. For HTTPS on a public server add
+# docker-compose.https.yml (Caddy with automatic certificates).
+name: sendora
+
+services:
+  sendora:
+    image: ghcr.io/sendora-app/sendora:${SENDORA_VERSION:?set SENDORA_VERSION in .env}
+    restart: unless-stopped
+    ports:
+      - "${SENDORA_BIND:-127.0.0.1}:${SENDORA_PORT:-8080}:8080"
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      SENDORA_DB_KEY_FILE: /run/secrets/sendora_db_key
+      # true only for the very first start of a new, empty database
+      SENDORA_DB_INITIALIZE: ${SENDORA_DB_INITIALIZE:-false}
+      TZ: ${TZ:-UTC}
+    # Any admin setting as SENDORA_<SETTING> (see docs/configuration.md).
+    env_file:
+      - path: sendora.env
+        required: false
+    volumes:
+      - ${SENDORA_DATA_DIR:-./data}:/data
+    secrets:
+      - sendora_db_key
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Resource limits: enough for normal use; raise mem_limit for very large
+    # database imports or many parallel transfers.
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 200
+
+secrets:
+  sendora_db_key:
+    file: ${SENDORA_DB_KEY_HOST_FILE:-./database.key}

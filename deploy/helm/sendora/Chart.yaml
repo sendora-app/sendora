@@ -1,0 +1,22 @@
+apiVersion: v2
+name: sendora
+description: >-
+  Sendora, self-hosted file sharing with encrypted storage: single-tenant,
+  multi-tenant (SQLite + SQLCipher) or Cluster (PostgreSQL on CloudNativePG).
+  Installs the application only; PostgreSQL, TLS certificates, DNS, the ingress
+  controller and storage classes are provided by the operator.
+type: application
+version: 0.1.0
+appVersion: "0.3.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/sendora-app/sendora
+sources:
+  - https://github.com/sendora-app/sendora
+keywords:
+  - file-sharing
+  - sqlcipher
+  - multi-tenant
+  - cloudnativepg
+maintainers:
+  - name: Sendora
+    url: https://github.com/sendora-app

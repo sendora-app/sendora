@@ -1,0 +1,529 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "flavour"
+  ],
+  "properties": {
+    "flavour": {
+      "type": "string",
+      "enum": [
+        "single",
+        "multi",
+        "cluster"
+      ]
+    },
+    "nameOverride": {
+      "type": "string"
+    },
+    "fullnameOverride": {
+      "type": "string"
+    },
+    "clusterDomain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "image": {
+      "type": "object",
+      "required": [
+        "repository"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^$|^sha256:[a-f0-9]{64}$"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        },
+        "pullSecrets": {
+          "type": "array"
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array"
+    },
+    "baseDomain": {
+      "type": "string",
+      "pattern": "^$|^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$"
+    },
+    "appUrl": {
+      "type": "string",
+      "pattern": "^$|^https?://"
+    },
+    "trustedProxies": {
+      "type": "string"
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      }
+    },
+    "extraEnv": {
+      "type": "array"
+    },
+    "extraEnvFrom": {
+      "type": "array"
+    },
+    "extraVolumes": {
+      "type": "array"
+    },
+    "extraVolumeMounts": {
+      "type": "array"
+    },
+    "database": {
+      "type": "object",
+      "properties": {
+        "initialize": {
+          "type": "boolean"
+        }
+      }
+    },
+    "masterKey": {
+      "type": "object",
+      "properties": {
+        "existingSecret": {
+          "type": "string"
+        },
+        "secretKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "generate": {
+          "type": "boolean"
+        },
+        "mountAsDirectory": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "keys": {
+      "type": "object",
+      "properties": {
+        "jobConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "opsPerHour": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "setupCode": {
+      "type": "object",
+      "properties": {
+        "existingSecret": {
+          "type": "string"
+        },
+        "secretKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^$|^.{16,}$"
+        },
+        "generate": {
+          "type": "boolean"
+        }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "existingClaim": {
+          "type": "string"
+        },
+        "storageClass": {
+          "type": "string"
+        },
+        "accessModes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ReadWriteOnce",
+              "ReadWriteMany",
+              "ReadOnlyMany",
+              "ReadWriteOncePod"
+            ]
+          }
+        },
+        "size": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?)?$"
+        },
+        "keep": {
+          "type": "boolean"
+        }
+      }
+    },
+    "volumePermissions": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "ClusterIP",
+            "NodePort",
+            "LoadBalancer"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "secretName": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "properties": {
+        "postgres": {
+          "type": "object",
+          "properties": {
+            "pooler": {
+              "type": "string",
+              "pattern": "^$|^[^:\\s]+:[0-9]{1,5}$"
+            },
+            "direct": {
+              "type": "string",
+              "pattern": "^$|^[^:\\s]+:[0-9]{1,5}$"
+            },
+            "sslMode": {
+              "type": "string",
+              "enum": [
+                "verify-full",
+                "verify-ca",
+                "require"
+              ]
+            },
+            "platformDatabase": {
+              "type": "string",
+              "pattern": "^[a-z_][a-z0-9_]{0,62}$"
+            },
+            "poolers": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            },
+            "caSecret": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "provisionerSecret": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "platformMfaRequired": {
+          "type": "boolean"
+        },
+        "coordPollSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 300
+        },
+        "leaseSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 5,
+          "maximum": 300
+        },
+        "keyEndpoint": {
+          "type": "object",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "ttlSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 86400
+            },
+            "tls": {
+              "type": "object",
+              "properties": {
+                "existingSecret": {
+                  "type": "string"
+                },
+                "caKey": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "generate": {
+                  "type": "boolean"
+                },
+                "validityDays": {
+                  "type": "integer",
+                  "minimum": 30
+                }
+              }
+            }
+          }
+        },
+        "controller": {
+          "$ref": "#/definitions/replicaSet"
+        },
+        "web": {
+          "$ref": "#/definitions/replicaSet"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "flavour": {
+            "enum": [
+              "multi",
+              "cluster"
+            ]
+          }
+        },
+        "required": [
+          "flavour"
+        ]
+      },
+      "then": {
+        "required": [
+          "baseDomain"
+        ],
+        "properties": {
+          "baseDomain": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "flavour": {
+            "const": "cluster"
+          }
+        },
+        "required": [
+          "flavour"
+        ]
+      },
+      "then": {
+        "required": [
+          "cluster"
+        ],
+        "properties": {
+          "cluster": {
+            "required": [
+              "postgres"
+            ],
+            "properties": {
+              "postgres": {
+                "required": [
+                  "pooler",
+                  "direct",
+                  "provisionerSecret"
+                ],
+                "properties": {
+                  "pooler": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "direct": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "provisionerSecret": {
+                    "required": [
+                      "name"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "flavour": {
+            "const": "cluster"
+          },
+          "cluster": {
+            "properties": {
+              "postgres": {
+                "properties": {
+                  "sslMode": {
+                    "const": "require"
+                  }
+                },
+                "required": [
+                  "sslMode"
+                ]
+              }
+            },
+            "required": [
+              "postgres"
+            ]
+          }
+        },
+        "required": [
+          "flavour"
+        ]
+      },
+      "then": {},
+      "else": {
+        "if": {
+          "properties": {
+            "flavour": {
+              "const": "cluster"
+            }
+          },
+          "required": [
+            "flavour"
+          ]
+        },
+        "then": {
+          "properties": {
+            "cluster": {
+              "properties": {
+                "postgres": {
+                  "properties": {
+                    "caSecret": {
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "replicaSet": {
+      "type": "object",
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "terminationGracePeriodSeconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pdb": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

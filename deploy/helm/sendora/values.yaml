@@ -1,0 +1,334 @@
+# Sendora Helm chart. See docs/helm.md.
+#
+# This chart installs the APPLICATION ONLY. You provide: PostgreSQL (Cluster
+# flavour), TLS certificates (cert-manager or other), DNS (external-dns or other),
+# an ingress controller, a network-policy engine and storage classes.
+#
+# Secrets are referenced by name (existingSecret). Nothing secret is stored in
+# values unless you opt in to a chart-created Secret, which is marked below.
+
+# single  = one tenant, SQLite + SQLCipher, one Pod (replicas 1)
+# multi   = many tenants on <slug>.<baseDomain>, SQLite + SQLCipher, one Pod
+# cluster = PostgreSQL (CloudNativePG), several web and controller replicas (preview)
+flavour: single
+
+nameOverride: ""
+fullnameOverride: ""
+clusterDomain: cluster.local
+
+image:
+  # No 0.3 image is published yet: build it from the repository Dockerfile
+  # (docs/helm.md) and push it to your registry.
+  repository: ghcr.io/sendora-app/sendora
+  tag: ""            # default: Chart.appVersion
+  digest: ""         # sha256:...; when set it wins over the tag
+  pullPolicy: IfNotPresent
+  pullSecrets: []    # names of image pull Secrets
+imagePullSecrets: []
+
+# ---------------------------------------------------------------- application
+# Public base domain of multi and cluster (tenants: <slug>.<baseDomain>, console:
+# admin.<baseDomain>). May carry ":port" for local tests (localhost:8080).
+baseDomain: ""
+# single only: canonical public URL, for example https://files.example.com
+appUrl: ""
+# Addresses (IPs/CIDRs, comma separated) of the ingress controller pods whose
+# X-Forwarded-* headers are believed. Set it behind an ingress, otherwise all
+# visitors share one rate-limit budget.
+trustedProxies: ""
+
+# Any further SENDORA_* settings (docs/configuration.md) become ConfigMap
+# entries and environment variables. Values are strings, numbers or booleans.
+config: {}
+#  SENDORA_TENANT_IDLE_MINUTES: 15
+#  SENDORA_PLATFORM_SMTP_HOST: smtp.example.com
+
+extraEnv: []         # additional container env (list of EnvVar)
+extraEnvFrom: []     # additional envFrom (list of EnvFromSource)
+extraVolumes: []     # for example a Secret holding an SMTP password file
+extraVolumeMounts: []
+
+# single/multi: SENDORA_DB_INITIALIZE. "true" lets the first start create a NEW
+# encrypted database on an empty volume; set it to false after the first start
+# (helm upgrade --set database.initialize=false). Ignored by cluster.
+database:
+  initialize: true
+
+# ------------------------------------------------------------------ key operations
+keys:
+  # SENDORA_KEY_JOB_CONCURRENCY (1-64): key jobs per controller/app process at once. A bulk rotation
+  # re-encrypts rows through PostgreSQL: budget max_connections for it (docs/helm.md).
+  jobConcurrency: 3
+  # SENDORA_KEY_OPS_PER_HOUR (1-10000): key operations per hour a tenant (and the platform console) may start.
+  opsPerHour: 10
+
+# ------------------------------------------------------------------ secrets
+masterKey:
+  # RECOMMENDED: name of a Secret you created, holding the 32 raw key bytes:
+  #   sendora-db keygen -key-file ./database.key
+  #   kubectl -n <ns> create secret generic sendora-db-key --from-file=database.key=./database.key
+  # Keep an offline recovery copy: losing the key loses all data.
+  existingSecret: ""
+  # The Secret key (file name) of the key. For rotation use a DIRECTORY of versions: keys
+  # master-1, master-2, ... in the Secret, all mounted, SENDORA_DB_KEY_FILE names the directory.
+  secretKey: database.key
+  # null = detect: directory when secretKey is empty or looks like master-<n>, single file otherwise.
+  # true  = mount the whole Secret as a directory (secretKey is then ignored, unless master-<n>).
+  # false = mount and use the single file secretKey only (version 1).
+  mountAsDirectory: null
+  # CONVENIENCE ONLY (tests, trials): the chart creates the Secret with a random
+  # 32-byte key. WARNING: the key is then stored in the Helm release Secret too,
+  # in clear (base64), and readable by everyone who can read release Secrets or
+  # run `helm get manifest`. The generated Secret carries helm.sh/resource-policy:
+  # keep and is reused on upgrade (lookup). With GitOps tools that do not
+  # support lookup (Argo CD template rendering) use existingSecret instead.
+  generate: false
+
+setupCode:
+  # Secret with the one-time code for creating the first administrator (at
+  # least 16 characters, not repetitive). Cluster web replicas ALL need the same
+  # code until the first platform administrator exists.
+  existingSecret: ""
+  secretKey: code
+  # WARNING: a literal value ends up in values and in the Helm release Secret.
+  value: ""
+  # Chart-created random code, kept across upgrades (lookup). Read it with the
+  # command printed by NOTES.txt. Ignored when existingSecret or value is set.
+  generate: true
+
+# ------------------------------------------------------------------ storage
+persistence:
+  enabled: true
+  existingClaim: ""            # use a claim you manage; nothing is created
+  storageClass: ""             # "" = cluster default; "-" = no class
+  accessModes: []              # default: ReadWriteOnce (single, multi), ReadWriteMany (cluster)
+  size: 10Gi
+  annotations: {}
+  # Keep the claim when the release is uninstalled (helm.sh/resource-policy).
+  keep: true
+# Some storage (local-path, k3s, some NFS/CSI setups) hands out a volume root that Sendora
+# (UID 10001) cannot chmod: it then stops with "chmod /data: operation not permitted". Preferred
+# fix: let the storage administrator make the volume owned by 10001. Otherwise enable this root
+# init container (one chown, capabilities CHOWN/FOWNER only). A root container does NOT meet the
+# "restricted" Pod Security Standard: the namespace then needs "baseline". Default image: the
+# Sendora image itself (no extra pull); cluster: runs in the controller pods only.
+volumePermissions:
+  enabled: false
+  image:  # e.g. docker.io/library/busybox / 1.36.1
+    repository: ""
+    tag: ""
+tmp:
+  sizeLimit: 1Gi               # emptyDir on /tmp (read-only root filesystem)
+
+# ----------------------------------------------------------------- workload
+# single and multi: one Pod, strategy Recreate (SQLite on one volume). Not
+# scalable: never raise replicas.
+app:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""
+  terminationGracePeriodSeconds: 60
+  pdb:
+    enabled: false             # a PDB on a single replica blocks node drains
+  probes:
+    startup:
+      failureThreshold: 30
+      periodSeconds: 10
+    readiness:
+      periodSeconds: 10
+      timeoutSeconds: 3
+    liveness:
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+serviceAccount:
+  create: true
+  annotations: {}
+  # Names default to <fullname> (single/multi), <fullname>-web, <fullname>-controller.
+  app:
+    name: ""
+  web:
+    name: ""
+  controller:
+    name: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # single: required. multi/cluster: default ["*.<baseDomain>", "<baseDomain>"].
+  hosts: []
+  tls:
+    # Secret with the certificate (cert-manager, or yours). Wildcard for multi
+    # and cluster. Empty = no tls section (the controller's default certificate).
+    secretName: ""
+
+# Recommended, but opt-in: NetworkPolicy only works on a CNI that enforces it
+# (Cilium, Calico, ...; others silently ignore it), see docs/helm.md. On Cilium
+# also apply docs/cluster/examples/networkpolicy-cilium.yaml (Kubernetes API).
+# The selectors below are examples for common setups; adapt them to your
+# CNI and namespace layout (Cilium's built-in ingress needs a CiliumNetworkPolicy
+# with fromEntities: ingress instead of ingress.namespaceSelector).
+networkPolicy:
+  enabled: false
+  ingress:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: ingress-nginx
+  # cluster: where PostgreSQL and its PgBouncer pods run (empty selector = any namespace).
+  postgres:
+    namespaceSelector: {}
+    podSelector: {}
+    port: 5432
+  # cluster controller -> Kubernetes API (Lease, TokenReview). Empty = any address on 443/6443.
+  kubeApi:
+    cidrs: []
+    ports:
+      - 443
+      - 6443
+  # Outbound HTTPS and SMTP submission to the internet (sign-in providers,
+  # webhooks, S3, mail), except link-local. Tenants' custom ports need extraEgress.
+  internetEgress:
+    enabled: true
+    ports:
+      - 443
+      - 587
+      - 465
+  extraIngress: []
+  extraEgress: []
+
+# ------------------------------------------------------------------ cluster
+cluster:
+  postgres:
+    pooler: ""                       # host:port of the read-write PgBouncer service (web + controller)
+    direct: ""                       # host:port of the read-write PostgreSQL service (controller)
+    sslMode: verify-full             # verify-full | verify-ca | require
+    platformDatabase: sendora_platform
+    poolers: 2                       # number of PgBouncer instances (connection limits)
+    caSecret:  # CloudNativePG server CA
+      name: ""
+      key: ca.crt
+    # Secret with the files username and password of sendora_provisioner.
+    provisionerSecret:
+      name: ""
+  platformMfaRequired: true          # platform administrators must use an authenticator app
+  leaseName: ""                      # default sendora-controller
+  coordPollSeconds: null             # 1-300, default 10
+  leaseSeconds: null                 # 5-300, default 15
+  keyEndpoint:
+    port: 8443
+    ttlSeconds: 600                  # web: key cache lifetime
+    user: ""                         # allowed caller; default: the web ServiceAccount of this release
+    tls:
+      # PRODUCTION: Secret (cert-manager Certificate or yours) with tls.crt and tls.key
+      # for the controller and the CA that signed it under caKey. Required SANs:
+      #   <svc>, <svc>.<ns>, <svc>.<ns>.svc, <svc>.<ns>.svc.<clusterDomain>
+      # where <svc> = <fullname>-controller-keys (the headless Service).
+      existingSecret: ""
+      caKey: ca.crt
+      # Optional separate source of the CA for web pods (so they never mount a
+      # Secret that also holds tls.key): a ConfigMap or Secret with caKey.
+      caConfigMap: ""
+      caSecret: ""
+      # CONVENIENCE (tests, small installs): the chart generates a CA and a
+      # server certificate (genCA/genSignedCert) with the right SANs and keeps
+      # them across upgrades (lookup). The CA certificate is public; the server
+      # key sits in the Secret <fullname>-keys-tls and in the Helm release
+      # Secret. The CA private key is discarded. Rotate: delete both objects,
+      # helm upgrade, restart the pods.
+      generate: false
+      validityDays: 3650
+  controller:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+    podAnnotations: {}
+    podLabels: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    priorityClassName: ""
+    terminationGracePeriodSeconds: 60
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+    topologySpread:
+      enabled: true
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      maxSkew: 1
+    pdb:
+      enabled: true
+      minAvailable: 1
+  web:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+    podAnnotations: {}
+    podLabels: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    priorityClassName: ""
+    terminationGracePeriodSeconds: 60
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+    topologySpread:
+      enabled: true
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      maxSkew: 1
+    pdb:
+      enabled: true
+      minAvailable: 1
+  probes:
+    readiness:
+      periodSeconds: 5
+      timeoutSeconds: 3
+    liveness:
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 3
+      initialDelaySeconds: 30

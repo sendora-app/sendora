@@ -1,0 +1,50 @@
+{{- $svcLabels := dict }}
+{{- if eq .Values.flavour "cluster" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sendora.webName" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "web") | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "sendora.selectorLabels" (dict "ctx" . "component" "web") | nindent 4 }}
+  ports:
+    - { name: http, port: {{ .Values.service.port }}, targetPort: http }
+---
+# Headless: the name resolves to every ready controller pod. Web replicas present a
+# tenant's key to ALL controllers (each keeps it in its own memory), so they need the
+# pod addresses, not one virtual IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sendora.keysServiceName" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "sendora.selectorLabels" (dict "ctx" . "component" "controller") | nindent 4 }}
+  ports:
+    - { name: keys, port: {{ .Values.cluster.keyEndpoint.port }}, targetPort: keys }
+{{- else }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sendora.fullname" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "app") | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "sendora.selectorLabels" (dict "ctx" . "component" "app") | nindent 4 }}
+  ports:
+    - { name: http, port: {{ .Values.service.port }}, targetPort: http }
+{{- end }}

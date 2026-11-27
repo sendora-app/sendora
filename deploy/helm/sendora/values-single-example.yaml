@@ -1,0 +1,27 @@
+# Single-tenant Sendora behind an ingress. helm install sendora deploy/helm/sendora -n sendora --create-namespace -f values-single-example.yaml
+flavour: single
+image:
+  repository: registry.example.com/sendora   # your build of the Dockerfile
+  tag: "0.3.0"
+appUrl: https://files.example.com
+trustedProxies: 10.0.0.0/8                   # ingress controller pod network
+masterKey:
+  existingSecret: sendora-db-key             # kubectl create secret generic sendora-db-key --from-file=database.key=./database.key
+database:
+  initialize: true                           # false after the first start
+persistence:
+  storageClass: fast-rwo
+  size: 20Gi
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - files.example.com
+  tls:
+    secretName: sendora-tls  # issued by cert-manager (operator)
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 64m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+networkPolicy:
+  enabled: false

@@ -1,0 +1,240 @@
+{
+  "description": "Sendora share file format v2 test vectors (docs/FILE-FORMAT.md). All vectors share one salt and file id; real files never do.",
+  "plaintext_rule": "plaintext byte i = i mod 251",
+  "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "master_key_hex": "d963419116e71e9875abd881a7651c25b569dbfac1262c615027d8c436f0c6fd",
+  "salt_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+  "file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+  "file_key_hex": "b18116d13430fa9379f91a14319419a17ef29d5e7a7c862c1cc054a613435ec5",
+  "vectors": [
+    {
+      "plain_size": 0,
+      "stored_size": 69,
+      "plain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "file_sha256": "b2558fbcb6a9bddf0067b6bd6ed4c6e03005efd28920e0707d4db33b8daa2e54",
+      "file_hex": "534e444602a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfe3612d34acaf4abf3cdf409b9a23dfc7"
+    },
+    {
+      "plain_size": 1,
+      "stored_size": 70,
+      "plain_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+      "file_sha256": "2e8f2f437c486a50529563a744905f21ebad4c2ffc84580a5e13eb3f4b88c433",
+      "file_hex": "534e444602a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf8c9971c5bbc363c4a23cdd3d07548758b3"
+    },
+    {
+      "plain_size": 65535,
+      "stored_size": 65604,
+      "plain_sha256": "dda402a2c028f0cbbdbc5c6ebae965eed9c75f71236e7022b0386d3455d5ae2f",
+      "file_sha256": "391d178a0810449a34409721d1fc60a9d5d437685492b367717e2fdfb13b2954"
+    },
+    {
+      "plain_size": 65536,
+      "stored_size": 65605,
+      "plain_sha256": "4b640d85ab3ba30fd02c9fc9db4a8928f416322ad27022ea58a65aaee68a4df2",
+      "file_sha256": "8fc0a58c2a4e3005548d2167ce33d1467bce2039cb0fd90cf46f80027f185331"
+    },
+    {
+      "plain_size": 65537,
+      "stored_size": 65622,
+      "plain_sha256": "237356e18b503616912abb8ffaed3a72591e397d4ac294c4637917d48a3f529d",
+      "file_sha256": "f1f12e152f87f55ee25e0902c7706b9dfb4c6867452b1555588c1c0df290c262"
+    },
+    {
+      "plain_size": 131072,
+      "stored_size": 131157,
+      "plain_sha256": "feb1e4409d009e0ec502eaabe321f86b5197a881e9b765252ec8a75d6957596d",
+      "file_sha256": "d02cfa301d7d13aa39fb7398cb0283e15899dd72ccbbbe93bb0dfcf4cd981fe0"
+    },
+    {
+      "plain_size": 196609,
+      "stored_size": 196726,
+      "plain_sha256": "bcdd5f57f522b30abb7671cf75eb113a108b7652de81d9ca2874f2e3a5a3cfc1",
+      "file_sha256": "1c8f2342a522d497b0df8a567009c2cb7d6603b0c970b5d8877b5556b642e824"
+    }
+  ],
+  "negative_vectors": [
+    {
+      "name": "flipped tag bit (chunk 0)",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "flip",
+          "offset": 65604
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "20ffbdec01ccd1f145c31ffc8e5d0481f790f5f1b3b7814b933a3a60a033bdfa",
+      "expect": "chunk:0"
+    },
+    {
+      "name": "flipped ciphertext bit (chunk 3)",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "flip",
+          "offset": 196709,
+          "bit": 7
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "e78c6a3c228f6e4d505a7aa00845e247d7927bb6d66e9aa5e5a452168a71a67c",
+      "expect": "chunk:3"
+    },
+    {
+      "name": "last chunk dropped at the boundary, size adjusted",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "truncate",
+          "offset": 196709
+        }
+      ],
+      "row_plain_size": 196608,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "48fd450403c69c4af536cb336296bd165ccb6036d69800d57ab891178a905302",
+      "expect": "chunk:2"
+    },
+    {
+      "name": "middle chunk dropped, size adjusted",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "drop_chunk",
+          "a": 1
+        }
+      ],
+      "row_plain_size": 131073,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "2ca35e74f646fabab83bd0d39b445fbd4898886ab540ab770b2564494f7d3e0a",
+      "expect": "chunk:1"
+    },
+    {
+      "name": "chunks 0 and 1 swapped",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "swap_chunks",
+          "b": 1
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "262aeab599a2a3864e7a302225310b5aa3ea574363bf6c402cad266aa1066b4e",
+      "expect": "chunk:0"
+    },
+    {
+      "name": "wrong magic",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "set_byte",
+          "value": 88
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "d4e8c91429e6b2ad3e73e31dc7cd85cbc29141e5272627ac9df7738a053fbfad",
+      "expect": "bad-header"
+    },
+    {
+      "name": "wrong version",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "set_byte",
+          "offset": 4,
+          "value": 3
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "1ca262707a386728c87f3e0c56fe80e1c45c14af5e200d8fc4cf6af52e3d7053",
+      "expect": "bad-header"
+    },
+    {
+      "name": "version 1 header with a v2 row id",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "set_byte",
+          "offset": 4,
+          "value": 1
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "d7997e88d30067ad88dcf79e9fae8b51530523643130b70c7cda38795e54ca31",
+      "expect": "bad-header"
+    },
+    {
+      "name": "flipped salt bit",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "flip",
+          "offset": 5
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "e2747cb887f9c0c2cdedb213c3be7806595cdd7f383e93a28662bcd3e6cef952",
+      "expect": "chunk:0"
+    },
+    {
+      "name": "flipped file id bit in the header",
+      "base_plain_size": 196609,
+      "ops": [
+        {
+          "op": "flip",
+          "offset": 37
+        }
+      ],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "2259a543adf5ef37c141d80db37aa629b5057d602f01669d964aa263b620dfd6",
+      "expect": "id-mismatch"
+    },
+    {
+      "name": "wrong key",
+      "base_plain_size": 196609,
+      "ops": [],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "root_key_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+      "mutated_file_sha256": "1c8f2342a522d497b0df8a567009c2cb7d6603b0c970b5d8877b5556b642e824",
+      "expect": "chunk:0"
+    },
+    {
+      "name": "wrong file id in the row",
+      "base_plain_size": 196609,
+      "ops": [],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "1c8f2342a522d497b0df8a567009c2cb7d6603b0c970b5d8877b5556b642e824",
+      "expect": "id-mismatch"
+    },
+    {
+      "name": "empty file id in the row (v1 expected)",
+      "base_plain_size": 196609,
+      "ops": [],
+      "row_plain_size": 196609,
+      "row_file_id_hex": "",
+      "root_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "mutated_file_sha256": "1c8f2342a522d497b0df8a567009c2cb7d6603b0c970b5d8877b5556b642e824",
+      "expect": "bad-header"
+    }
+  ]
+}

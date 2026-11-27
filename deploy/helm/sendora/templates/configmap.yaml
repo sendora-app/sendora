@@ -1,0 +1,13 @@
+{{- include "sendora.validate" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sendora.configName" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "config") | nindent 4 }}
+data:
+  {{- $d := include "sendora.configData" . | trim }}
+  {{- if $d }}
+  {{- $d | nindent 2 }}
+  {{- else }} {}
+  {{- end }}

@@ -1,0 +1,44 @@
+# Cluster flavour (preview): PostgreSQL on CloudNativePG, 2 web + 2 controller replicas.
+# Everything referenced below is created by YOU first (docs/helm.md, section "What you provide").
+flavour: cluster
+image:
+  repository: registry.example.com/sendora
+  tag: "0.3.0"
+baseDomain: sendora.example.com
+trustedProxies: 10.0.0.0/8
+masterKey:
+  existingSecret: sendora-master-key          # keys master-1 (master-2, ... later): a directory of versions
+  secretKey: master-1                         # master-<n> = mounted as a directory (docs/helm.md, rotation)
+keys:
+  jobConcurrency: 3
+  opsPerHour: 10
+setupCode:
+  existingSecret: sendora-setup               # key: code (>= 16 characters), until the first admin exists
+persistence:
+  storageClass: nfs-rwx                       # ReadWriteMany
+  size: 100Gi
+cluster:
+  postgres:
+    pooler: sendora-pg-pooler-rw.postgres.svc:5432
+    direct: sendora-pg-rw.postgres.svc:5432
+    caSecret:
+      name: sendora-pg-ca
+      key: ca.crt
+    provisionerSecret:
+      name: sendora-pg-provisioner  # keys: username, password
+  keyEndpoint:
+    tls:
+      existingSecret: sendora-keys-tls        # cert-manager Certificate: tls.crt, tls.key, ca.crt
+  web:
+    replicas: 3
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    secretName: sendora-wildcard-tls
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 64m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+networkPolicy:
+  enabled: false                              # adapt the selectors to your CNI first

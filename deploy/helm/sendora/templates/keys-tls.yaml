@@ -1,0 +1,42 @@
+{{- /* Generated TLS material of the key endpoint (cluster.keyEndpoint.tls.generate). */ -}}
+{{- if and (eq .Values.flavour "cluster") .Values.cluster.keyEndpoint.tls.generate }}
+{{- $tls := .Values.cluster.keyEndpoint.tls }}
+{{- $secret := include "sendora.keysTLSSecretName" . }}
+{{- $svc := include "sendora.keysServiceName" . }}
+{{- $ns := .Release.Namespace }}
+{{- $dom := .Values.clusterDomain }}
+{{- $existing := lookup "v1" "Secret" $ns $secret }}
+{{- $crt := "" }}{{ $key := "" }}{{ $ca := "" }}
+{{- if and $existing $existing.data (hasKey $existing.data "tls.crt") (hasKey $existing.data "ca.crt") }}
+{{- $crt = index $existing.data "tls.crt" }}{{ $key = index $existing.data "tls.key" }}{{ $ca = index $existing.data "ca.crt" }}
+{{- else }}
+{{- $days := int $tls.validityDays }}
+{{- $authority := genCA "sendora-keys-ca" $days }}
+{{- $sans := list $svc (printf "%s.%s" $svc $ns) (printf "%s.%s.svc" $svc $ns) (printf "%s.%s.svc.%s" $svc $ns $dom) }}
+{{- $cert := genSignedCert $svc nil $sans $days $authority }}
+{{- $crt = $cert.Cert | b64enc }}{{ $key = $cert.Key | b64enc }}{{ $ca = $authority.Cert | b64enc }}
+{{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secret }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "controller") | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ $crt }}
+  tls.key: {{ $key }}
+  ca.crt: {{ $ca }}
+---
+# Public CA bundle for the web pods (they never mount tls.key).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sendora.keysCAConfigMapName" . }}
+  labels:
+    {{- include "sendora.labels" (dict "ctx" . "component" "web") | nindent 4 }}
+data:
+  ca.crt: |
+    {{- $ca | b64dec | nindent 4 }}
+{{- end }}

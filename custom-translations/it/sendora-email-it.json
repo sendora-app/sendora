@@ -1,0 +1,40 @@
+{
+  "format": "sendora-email-templates",
+  "version": 1,
+  "language": "it",
+  "name": "Italiano",
+  "templates": {
+    "password_reset": {
+      "subject": "Reimpostazione password",
+      "body": "Reimposta la tua password: {{.URL}}\n\nIl link è valido per 1 ora."
+    },
+    "reverse_completed": {
+      "subject": "Sono stati caricati dei file per te",
+      "body": "{{.SenderName}} ha caricato dei file per te: {{.URL}}\n\nCondivisione: {{.ShareName}}"
+    },
+    "reverse_invite": {
+      "subject": "{{.SenderName}} ti invita a caricare dei file",
+      "body": "Ciao {{.RecipientName}},\n\n{{.SenderName}} ti invita a caricare dei file: {{.URL}}\n\n{{.Message}}"
+    },
+    "share_created": {
+      "subject": "{{.SenderName}} ha condiviso dei file con te",
+      "body": "Ciao {{.RecipientName}},\n\n{{.SenderName}} ha condiviso dei file con te: {{.URL}}\n\n{{.Message}}\n\nScadenza: {{.Expires}}"
+    },
+    "share_downloaded": {
+      "subject": "È iniziato un download della tua condivisione",
+      "body": "È iniziato un download della tua condivisione \"{{.ShareName}}\".\n\nFile: {{.FileNames}}\nAvviato alle: {{.StartedAt}}\nNumero di download: {{.DownloadCount}}\n\nQuesto registra l'avvio dell'invio dei file, non un trasferimento completato né la conferma che il destinatario abbia salvato o letto i file."
+    },
+    "share_expiring": {
+      "subject": "Condivisione in scadenza",
+      "body": "La tua condivisione \"{{.ShareName}}\" scade il {{.Expires}}: {{.URL}}"
+    },
+    "verify_email": {
+      "subject": "Verifica la tua email",
+      "body": "Il tuo codice di verifica è {{.Code}}"
+    },
+    "welcome": {
+      "subject": "Il tuo account {{.ApplicationName}} è pronto",
+      "body": "Ciao {{.RecipientName}},\n\nè stato creato un account per te su {{.ApplicationName}}.\n\nNome utente: {{.Username}}\nAccedi: {{.LoginURL}}\n\nScegli qui la tua password (il link funziona una sola volta ed è valido per {{.ExpiresDays}} giorni):\n{{.SetPasswordURL}}\n\nSe non ti aspettavi questa email, puoi ignorarla."
+    }
+  }
+}

@@ -1,0 +1,59 @@
+# HTTPS override: Caddy in front of Sendora with automatic Let's Encrypt
+# certificates. Needs a DNS name pointing to this server and ports 80/443 open.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+#
+# Set SENDORA_DOMAIN (and APP_URL=https://<domain>) in .env.
+services:
+  sendora:
+    ports: !reset []
+    environment:
+      APP_URL: https://${SENDORA_DOMAIN:?set SENDORA_DOMAIN in .env}
+      # Believe X-Forwarded-For only from Caddy on the internal network, so rate
+      # limits and address blocking see the real visitor addresses.
+      SENDORA_TRUSTED_PROXIES: 172.31.250.0/24
+    networks:
+      - internal
+
+  caddy:
+    # Pinned by digest; update tag and digest together.
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    restart: unless-stopped
+    depends_on:
+      - sendora
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SENDORA_DOMAIN: ${SENDORA_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    # Hardened like Sendora: read-only image, writes only to its volumes and
+    # /tmp, and of all root privileges only binding ports 80/443.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 200
+    networks:
+      - internal
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:
