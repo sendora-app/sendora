@@ -2,7 +2,7 @@
 
 Sendora is self-hosted software, not a service: the organisation that deploys it (the "operator" or "customer") runs the infrastructure and the processes around it. This matrix states, per control area, what the Sendora application provides, what the operator must do, and what evidence Sendora can produce for an audit. It is organised by the ISO/IEC 27001:2022 Annex A themes and the SOC 2 Trust Services Criteria. It does not certify anything: Sendora has **not** been independently audited, and an operator's certification depends on the operator's own controls.
 
-Written for version 0.2.0 (object storage rows and section 4a came with 0.2.0). The Cluster flavour of 0.3 is not covered yet ([cluster/QUICKSTART.md](../cluster/QUICKSTART.md), [ENCRYPTION.md](../ENCRYPTION.md)).
+Applies to version 0.3.0: the Community single-tenant and multi-tenant flavours and the Cluster flavour (a preview; [CHOOSING-A-FLAVOUR.md](../CHOOSING-A-FLAVOUR.md)). Rows that differ per flavour say so; section 4a covers the platform operator of the multi-tenant and Cluster flavours.
 
 [Back to the compliance index](README.md)
 
@@ -14,16 +14,17 @@ Legend: **Provided** = implemented in the application; **Operator** = customer r
 |---|---|---|
 | Audit log | Admin → Audit log, or `GET /api/audit` (administrators and auditors) | Tamper-evident record of authentication, account, administrative, share and system events ([AUDIT-EVENTS.md](AUDIT-EVENTS.md)) |
 | Audit export | `GET /api/audit/export?format=csv` or `jsonl` (also `/api/logs/export`) | All fields including `seq`, `prev_hash`, `hash`, with filters; the export itself is audited |
-| Chain verification | `GET /api/audit/status`; readiness check `audit_chain`; offline `sendora-db audit-verify -source <db> -key-file <key> [-json]` | Whether the chain verifies, first broken record, count, checkpoint |
+| Chain verification | `GET /api/audit/status`; readiness check `audit_chain`; offline in the SQLite flavours `sendora-db audit-verify -source <db> -key-file <key> [-json]` (add `-tenant <id>` for a tenant) | Whether the chain verifies, first broken record, count, checkpoint |
 | Off-host audit copy and heartbeat | Forwarding to stdout, syslog or webhook; `chain_head` every 5 minutes | Records plus chain head for gap and truncation detection at the receiver |
 | Access-review report | Admin/Auditor → Access review, `GET /api/access-review`, export `GET /api/access-review/export?format=csv` or `jsonl` (audited) | Every account (except guests): role, sign-in sources, MFA enrolment and policy, created/role/email changes with who and when, last sign-in, lock and disable state, share count and storage (no share names) |
 | File integrity report | `sendora-db verify-files -source <db> -key-file <key> -data-dir <dir> [-json] [-all]` | Header, size, file ID, every chunk tag and SHA-256 of every stored file, local or in an object store; orphan files and orphan objects |
-| Storage location and migration evidence (0.2.0) | Admin → Storage; audit events `storage_*`, `backup_remote_*` | Current backend, files and bytes per location, pending deletions, migration history with counts |
+| Storage location and migration evidence | Admin → Storage; audit events `storage_*`, `backup_remote_*` | Current backend, files and bytes per location, pending deletions, migration history with counts |
 | Database verification | `sendora-db verify` | Opens the database with the key and reports counts |
+| Key status | Admin → Keys (`GET /api/admin/keys`); platform console → Key management (multi-tenant and Cluster); audit events of [AUDIT-EVENTS.md](AUDIT-EVENTS.md) section 4.8 | Per purpose the active version, state, fingerprint, values or files still on older versions and running jobs; per tenant the key mode and fingerprint. Never key material. The control log of each database is verified at every open; a database that does not verify is not opened |
 | Personal-data export | Profile → Your data (`GET /api/users/me/export`) | A user's own data (see [PERSONAL-DATA.md](PERSONAL-DATA.md)) |
 | Configuration evidence | Admin → Settings (managed values marked), `SENDORA_*` variables in your deployment repository; changes are in the audit log as `settings_changed` with old and new values (secrets by name only) | Effective security settings |
 | Readiness and metrics | `GET /api/health/ready`, `GET /api/metrics` (token) | Database, audit write state, disk, backup age, chain; sign-in, MFA, decrypt, ban, download and upload counters |
-| Supply-chain evidence (0.1.5 onwards) | `cosign verify`, `gh attestation verify` ([SECURITY.md](../../SECURITY.md#verifying-release-images)) | Keyless signature, build provenance, SPDX SBOM per image digest |
+| Supply-chain evidence (images from 0.1.5 onwards) | `cosign verify`, `gh attestation verify` ([SECURITY.md](../../SECURITY.md#verifying-release-images)) | Keyless signature, build provenance, SPDX SBOM per image digest |
 | Development evidence | GitHub Actions runs, code scanning (CodeQL, Trivy), Dependabot pull requests | Test, scan and update history |
 
 ## 2. ISO/IEC 27001:2022 Annex A
@@ -40,7 +41,7 @@ Legend: **Provided** = implemented in the application; **Operator** = customer r
 | Access control, identity, authentication (5.15–5.17) | Local accounts, MFA (TOTP, WebAuthn; policies `off`/`optional`/`admins`/`privileged`/`all`), OIDC/Entra/Google/GitHub, local login can be disabled, lockout, IP bans, step-up for critical admin actions, admin IP allowlist, session limits | Run the identity provider and its MFA; joiner/mover/leaver process; disable accounts at the IdP and in Sendora; set MFA policy | Access-review report; auth events |
 | Access rights and reviews (5.18) | Access-review report and export; disable/enable accounts; sign users out everywhere | Perform periodic reviews as a **process** (Sendora produces the report, it does not schedule or sign off reviews) | Exported report; `access_review_exported` events |
 | Incident management (5.24–5.28) | Audit log, forwarding, heartbeat, metrics, security notifications to users | Incident process, alerting, forensics, notification of authorities and data subjects | Audit export, forwarded logs |
-| Business continuity, ICT readiness (5.29–5.30) | Automatic encrypted database backups (daily, `backup_keep`), optionally copied to the object store (`backup_remote_enabled`); readiness check for backup age | Back up the **whole volume** (share files are not in Sendora's backups) and the key off-host; with an object store, protect share files with provider versioning/soft delete or replication; test restores; DR plan. **Gap:** no HA, single instance | `backup_*` events; readiness `backup` |
+| Business continuity, ICT readiness (5.29–5.30) | Automatic encrypted database backups (daily, `backup_keep`), optionally copied to the object store (`backup_remote_enabled`); readiness check for backup age | Back up the **whole volume** (share files are not in Sendora's backups) and the key off-host; with an object store, protect share files with provider versioning/soft delete or replication; test restores; DR plan. Cluster: back up PostgreSQL (encrypted, continuously archived), every master key version a backup still needs and, for tenant-managed tenants, make sure the tenant keeps its own key. **Gap:** no HA in the Community flavours | `backup_*` events; readiness `backup` |
 | Legal, privacy, PII (5.31–5.34) | GDPR export, erasure, rectification; IP logging off by default; privacy/terms links | Legal assessment, privacy notice, records of processing, DPIA, retention decisions. **Gap:** no legal hold | [PERSONAL-DATA.md](PERSONAL-DATA.md) |
 | Independent review, compliance (5.35–5.36) | — | Commission reviews of your deployment. **Gap:** Sendora itself is not independently audited or penetration tested | — |
 | Documented procedures (5.37) | Configuration, quick starts, hardening guide (wiki), this folder | Write your runbooks | — |
@@ -56,7 +57,7 @@ Legend: **Provided** = implemented in the application; **Operator** = customer r
 
 | Control area | Sendora provides | Operator must | Evidence |
 |---|---|---|---|
-| Physical security, equipment, storage media, disposal (7.1–7.14) | Database, backups and new share files encrypted at rest, so a lost disk without the key reveals no contents | Data-centre or cloud physical security; secure disposal; keep the key off the data media | — |
+| Physical security, equipment, storage media, disposal (7.1–7.14) | SQLite flavours: database, backups and share files encrypted at rest, so a lost disk without the key reveals no contents. Cluster: share files and column-encrypted values are encrypted; the rest of the PostgreSQL data is not | Data-centre or cloud physical security; secure disposal; keep the key off the data media; in the Cluster flavour encrypt the PostgreSQL volumes and backups | — |
 
 ### 2.4 Technological controls (A.8)
 
@@ -74,15 +75,15 @@ Legend: **Provided** = implemented in the application; **Operator** = customer r
 | Information deletion (8.10) | Expiry, automatic clean-up after `clean_files_days`, erasure; remote objects are queued for deletion in the same transaction and retried | Set retention; delete volume backups per policy; align object-store versioning/soft-delete retention with your erasure statements | `share_files_purged`, `user_erased` |
 | Data masking (8.11) | Audit log uses `share#N`; statistics are counts; secrets never logged | — | Audit export |
 | Data leakage prevention (8.12) | Owner-only access; admins cannot open shares | **Gap:** no DLP or content inspection | — |
-| Backup (8.13) | Daily encrypted DB backups, pre-import backup, `sendora-db backup`; optional remote copies in the object store | Back up volume and key separately and off-host; test restore; keep the database key out of the object store | `backup_*` events |
-| Redundancy (8.14) | — | **Gap:** single instance; redundancy only at the storage/platform level | — |
+| Backup (8.13) | SQLite flavours: daily encrypted DB backups, pre-import backup, `sendora-db backup`; optional remote copies in the object store. Cluster: none in the application | Back up volume and key separately and off-host; test restore; keep the database key out of the object store. Cluster: PostgreSQL backups and point-in-time recovery ([cluster/TENANT-KEY-RESTORE.md](../cluster/TENANT-KEY-RESTORE.md)); keep old master key versions as long as backups need them | `backup_*` events |
+| Redundancy (8.14) | Cluster: several web and controller replicas with leader election | Community flavours: **Gap**, single instance; redundancy only at the storage/platform level. Cluster: run PostgreSQL highly available (for example 3 instances with synchronous replication) | — |
 | Logging (8.15) | Tamper-evident audit log, 90–365 days, forwarding, heartbeat | Retain forwarded logs as long as your policy requires; protect the receiver | Chain verification, exports |
 | Monitoring (8.16) | Readiness, Prometheus metrics, forwarding status | **Monitoring/SIEM:** alerting, correlation, on-call | Metrics, `/api/audit/status` |
 | Clock synchronisation (8.17) | Audit timestamps in UTC from the host clock | NTP on hosts | — |
-| Privileged utilities (8.18) | `sendora-db` works offline with the key | Restrict host access; offline tool use is **not audited** | — |
+| Privileged utilities (8.18) | `sendora-db` works offline with the key | Restrict host access (and `pods/exec` in Kubernetes); offline tool use is **not audited**, except `storage-migrate`, `tenant-import` and `platform-admin-reset` | — |
 | Software installation (8.19) | Signed images (from 0.1.5) | Deploy by verified digest; admission policy | cosign / attestation output |
 | Network security, segregation, web filtering (8.20–8.23) | Trusted-proxy handling; SSRF guards on outbound OIDC and forwarding; object-store endpoints https-only (http only for private hosts); example NetworkPolicy | **Network:** TLS termination, firewalling, egress restriction (including the object store), protect the proxy→Sendora hop; private, TLS-only bucket policy | — |
-| Cryptography (8.24) | SQLCipher, AES-256-GCM files (encrypted before upload to an object store), HMAC chain, HKDF subkeys ([FILE-FORMAT.md](../FILE-FORMAT.md)) | **TLS** in front; **storage encryption** of the volume (plain staging data, names on disk); **key custody** (32-byte key file, separate backup, access control); object-store credentials: least privilege, rotation, workload identity where possible. **Gap:** no key rotation, no HSM/KMS | Startup log `file encryption active fp=…` |
+| Cryptography (8.24) | SQLCipher (SQLite flavours), column encryption under per-tenant data keys with a verified control log, AES-256-GCM files (encrypted before upload to an object store), HMAC audit chain, HKDF subkeys; online rotation of the tenant keys, forced rotation by the platform operator, master key rotation and tenant-managed keys in the Cluster flavour ([ENCRYPTION.md](../ENCRYPTION.md), [FILE-FORMAT.md](../FILE-FORMAT.md)) | **TLS** in front; **storage encryption** of the volume (plain staging data, names on disk) and, in the Cluster flavour, of PostgreSQL and its backups; **key custody** (32-byte key file or master key versions, separate backup, for example Shamir shares, access control); rotate keys after an incident; object-store credentials: least privilege, rotation, workload identity where possible. **Gap:** no HSM/KMS | Startup log `file encryption active fp=…`; Admin → Keys |
 | Secure development (8.25–8.29, 8.31–8.33) | Tests incl. route access matrix, fuzz/property tests, CodeQL, govulncheck, npm audit, pinned actions/images, release gating | Test your deployment and upgrades in a non-production environment | CI history |
 | Outsourced development (8.30) | Development is by a single maintainer with an AI assistant | Assess this as a risk | [SECURITY.md](../../SECURITY.md) |
 | Change management (8.32) | CHANGELOG; versioned releases | Change process for upgrades and configuration | — |
@@ -104,12 +105,12 @@ Legend: **Provided** = implemented in the application; **Operator** = customer r
 | **CC6.7** Transmission | Outbound TLS for SMTP (default STARTTLS), syslog (default TLS), webhook (HTTPS) | **TLS termination** for all user traffic | — |
 | **CC6.8** Malicious software | Safe download headers, preview allowlist; signed images | **Gap:** no malware scanning; operator scans at the edge | — |
 | **CC7.1** Vulnerability detection | CI scans, weekly CodeQL and Trivy, Dependabot | Scan your environment; **patching** | Code scanning |
-| **CC7.2** Anomaly monitoring | Audit log, forwarding, heartbeat, metrics | **SIEM**, alert rules (for example `login_lockout`, `ip_banned`, `access_denied`, `file_decrypt_failed`, `key_fingerprint_changed`, `audit_purge_failed`, chain head moving backwards) | Forwarded records |
+| **CC7.2** Anomaly monitoring | Audit log, forwarding, heartbeat, metrics | **SIEM**, alert rules (for example `login_lockout`, `ip_banned`, `access_denied`, `file_decrypt_failed`, `key_fingerprint_changed`, `key_rotation_failed`, `kek_*_failed`, `tenant_unlock` failures, `audit_purge_failed`, chain head moving backwards) | Forwarded records |
 | **CC7.3–CC7.5** Incident evaluation, response, recovery | Session revocation, account disable, IP bans, MFA reset flow, backups, `verify-files` | Incident response plan and execution, communication | Audit export |
 | **CC8.1** Change management | Versioned, signed releases; settings changes audited with old/new values | Approve and test upgrades and configuration changes | `settings_changed` |
 | **CC9.1** Business disruption | Backups and readiness | BCP/DR, volume and key backups, restore tests | — |
 | **CC9.2** Vendor risk | This documentation, SBOM, provenance | Assess Sendora and its dependencies; no vendor SLA | SBOM attestation |
-| **A1** Availability | Readiness/liveness probes, graceful shutdown, daily DB backups | Capacity, HA at platform level, backups of the volume, monitoring. **Gap:** single instance, no SLA | Readiness, metrics |
+| **A1** Availability | Readiness/liveness probes, graceful shutdown, daily DB backups (SQLite flavours); several replicas in the Cluster flavour | Capacity, HA at platform level, backups of the volume, monitoring; in the Cluster flavour PostgreSQL HA and announcing controller rollouts to tenant-managed tenants (they lock on restart). **Gap:** single instance in the Community flavours, no SLA | Readiness, metrics |
 | **C1** Confidentiality | Encryption at rest, owner-only access, expiry and clean-up, admins cannot read shares | Classification policy, TLS, storage encryption, key custody, volume-backup protection | Settings, `share_files_purged` |
 | **PI1** Processing integrity | SHA-256 at upload and verified downloads; authenticated encryption detects modified files (409, `file_decrypt_failed`); `verify-files` | Run `verify-files` periodically; investigate failures | `verify-files` output |
 | **P** Privacy | Export, erasure, rectification, IP minimisation, retention, terms/privacy links ([PERSONAL-DATA.md](PERSONAL-DATA.md)) | Notice, consent where needed, DSR process for data outside Sendora (backups, forwarded logs, proxy logs). **Gap:** no legal hold | `personal_data_exported`, `user_erased` |
@@ -118,28 +119,29 @@ Legend: **Provided** = implemented in the application; **Operator** = customer r
 
 - **Infrastructure:** host or cluster, container runtime, storage, patching of all of it.
 - **TLS:** terminate HTTPS in front of Sendora; set `APP_URL` and `SENDORA_TRUSTED_PROXIES`.
-- **Storage encryption:** encrypt the data volume (upload parts, download snapshots, file names and link IDs in directory names are not encrypted by Sendora).
-- **Backups of the volume:** Sendora's backups cover the database only; back up share files, database backups and the key (separately) off-host and test restores.
+- **Storage encryption:** encrypt the data volume (upload parts, download snapshots, file names and link IDs in directory names are not encrypted by Sendora); in the Cluster flavour also the PostgreSQL volumes and backups.
+- **Backups of the volume:** Sendora's backups cover the database only (SQLite flavours); back up share files, database backups and the key (separately) off-host and test restores. In the Cluster flavour back up PostgreSQL yourself.
 - **Network:** firewalling, egress restriction, protection of the proxy→Sendora hop.
 - **Identity provider:** configuration, MFA, conditional access, leaver process.
 - **Monitoring/SIEM:** collect forwarded audit records, alert, retain, check the heartbeat.
-- **Key custody:** generate, store, back up and restrict the 32-byte key; there is no rotation once files exist.
+- **Key custody:** generate, store, back up and restrict the 32-byte key (in the Cluster flavour every master key version that a backup still needs); losing it loses the data. Rotate keys after an incident (Admin → Keys, Key management in the platform console).
 - **Patching:** update Sendora to the latest release; verify image signatures (0.1.5+).
 - **Access reviews as a process:** export the report regularly, review, act, keep the evidence.
 
-## 4a. Multi-tenant mode (optional, 0.2.0)
+## 4a. Multi-tenant and Cluster flavours
 
-When one installation serves several organisations, the **platform operator** runs Sendora for the tenants and the tenants act as controllers for their own users and shares.
+When one installation serves several organisations (multi-tenant or Cluster flavour), the **platform operator** runs Sendora for the tenants and the tenants act as controllers for their own users and shares.
 
 | Area | Sendora provides | Platform operator | Tenant |
 |---|---|---|---|
-| Isolation between tenants | separate encrypted database, directory, keys and secrets per tenant; isolation tests | runs one process per platform, protects the master key, keeps the image current | — |
+| Isolation between tenants | separate encrypted database, directory, keys and secrets per tenant (Cluster: a PostgreSQL database and roles per tenant); isolation tests | runs the platform (one process, or the Cluster replicas), protects the master key, keeps the image current | — |
+| Keys | per-tenant data keys and control log; tenant administrators rotate their keys; forced rotation by the platform (step-up, reason, both audit logs); Cluster: master key rotation, tenant-managed key, unlock page | keeps the master key (and its versions) safe, forces a rotation after an incident, restores locked tenant-managed tenants with the tenant ([cluster/TENANT-KEY-RESTORE.md](../cluster/TENANT-KEY-RESTORE.md)) | rotates its keys; with a tenant-managed key (Cluster): keeps the key or its Shamir shares, unlocks after controller restarts; losing it loses the data |
 | Platform access | console with TOTP required by default (`platform_mfa_required`; switching it off is audited), step-up for destructive actions, platform audit log, offline `platform-admin-reset` (audited) | manages platform administrators, decides on the MFA requirement, reviews the platform audit log | — |
 | Tenant administration | each tenant's own admin screens, audit log, backups | sets quotas and domains; never needs tenant content | manages users, settings, SMTP, providers, retention |
 | Storage | per-tenant storage: own S3/Azure/GCS (explicit credentials, SSRF-guarded endpoint) or a platform offer (platform bucket under a fixed prefix, or local disk); per-tenant storage limit for platform storage; encryption with the tenant's own file key | decides whether a tenant may use its own storage and what it offers; operates the platform bucket; sets storage limits | configures and pays for its own storage, its retention, versioning and region |
 | Network targets | SSRF guard for tenant-configured SMTP, OIDC, audit forwarding and storage endpoints; per-tenant exception (audited in both logs) | allows private targets only where needed | — |
 | DNS and TLS | DNS TXT verification of custom domains | wildcard certificate, ingress, custom-domain certificates | creates the DNS records for its custom domain |
-| Backups | per-tenant automatic backups; offline restore procedure | backs up the whole `DATA_DIR` and the master key, restores on request | downloads its own backups |
+| Backups | per-tenant automatic backups (multi-tenant flavour); offline restore procedure | backs up the whole `DATA_DIR` and the master key, restores on request; Cluster: backs up PostgreSQL and the file volume | downloads its own backups (multi-tenant flavour) |
 | Email | per-tenant SMTP; platform SMTP as default | operates/contracts the default SMTP server | may configure its own SMTP |
 | Agreements | — | data processing agreement with each tenant (processor, art. 28 GDPR) | controller for its users' data |
 
@@ -151,9 +153,9 @@ When one installation serves several organisations, the **platform operator** ru
 | No DLP / classification labels | Policy and training; restrict who may upload |
 | No four-eyes (dual-control) approval for administrator actions | Limit administrators; review the audit log; step-up and pre-audit records exist |
 | No legal hold or e-discovery | Preserve volume backups and forwarded logs outside Sendora |
-| No high availability, single instance | Platform-level restart and storage redundancy |
+| No high availability in the Community flavours (single instance) | Platform-level restart and storage redundancy, or the Cluster flavour (preview) |
 | No native TLS | Reverse proxy or Ingress |
-| No key rotation, no HSM/KMS | Strict key custody; plan for re-deployment if the key is compromised |
+| No HSM/KMS; in the SQLite flavours one key file opens every key | Strict key custody; if the key file is compromised, plan a re-deployment under a new key: rotating the tenant keys alone does not help while the attacker holds the key file from which the KEK is derived |
 | Most offline `sendora-db` actions are not audited (`storage-migrate`, `tenant-import` and `platform-admin-reset` are) | Restrict and log host access |
 | No scheduled access reviews or sign-off workflow | Run reviews as a process with the exported report |
 | No SLA, support contract or security team | Assess as supplier risk |

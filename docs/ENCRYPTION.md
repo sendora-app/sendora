@@ -21,7 +21,9 @@ controls the running server and its keys can read the data.
 Column encryption seals each value on its own, bound to its table, column and row, so a value copied to
 another row or changed by one bit is refused. Categories:
 
-- **Users:** user names, e-mail addresses, password hashes and password history, TOTP secrets.
+- **Users:** user names, e-mail addresses, password hashes and password history. Users' TOTP secrets are not
+  encrypted per column (SQLCipher protects them in the single and multi flavours; in Cluster they are readable in
+  PostgreSQL).
 - **Shares:** names, descriptions, password hashes, link IDs, invitation recipient names, e-mail addresses and messages.
 - **Files:** file names, paths, content hashes (`files.name`, `full_path`, `sha256`, and the upload equivalents) and the **file content**.
 - **Settings:** every setting value, including secrets such as SMTP passwords; storage credentials; sign-in provider client secrets.
@@ -175,7 +177,7 @@ tenant administrator can instead upload its own KEK. Then the platform no longer
 holds a usable copy: the operator's wraps of the data keys are destroyed at the switch, and the operator
 holds nothing that decrypts the tenant's columns, files or audit MAC key.
 
-| Endpoint (tenant administrators, step-up, at most 6 operations per hour, not while a key rotation runs) | Purpose |
+| Endpoint (tenant administrators, step-up, at most `SENDORA_KEY_OPS_PER_HOUR` operations per hour (default 10), not while a key rotation runs) | Purpose |
 |---|---|
 | `GET /api/admin/kek` | Mode (`platform` or `tenant`), fingerprint, locked state, controllers unlocked |
 | `POST /api/admin/kek/upload` `{"kek": "<base64>", "confirm": "<tenant slug>"}` | Switch to a tenant-managed key |

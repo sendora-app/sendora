@@ -135,8 +135,10 @@ masterKey.mountAsDirectory, otherwise detected from a secretKey of the form mast
         matchLabels:
           k8s-app: kube-dns
   ports:
-    - { protocol: UDP, port: 53 }
-    - { protocol: TCP, port: 53 }
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
 {{- end -}}
 
 {{/* Fail early on inconsistent values. */}}

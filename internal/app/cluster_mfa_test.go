@@ -114,6 +114,16 @@ func TestStepUpGrantSharedAcrossReplicas(t *testing.T) {
 	}
 }
 
+// TestServerEnvNamesKnown: variables read with os.Getenv outside the settings
+// loader are not reported as typos.
+func TestServerEnvNamesKnown(t *testing.T) {
+	for _, n := range []string{"SENDORA_SOURCE_URL", "SENDORA_KEY_JOB_CONCURRENCY", "SENDORA_KEY_OPS_PER_HOUR"} {
+		if !serverEnvNames[n] {
+			t.Errorf("%s is reported as unknown", n)
+		}
+	}
+}
+
 // TestClusterEnvNotReportedAsTypo: the Cluster flavour's variables and the
 // service links of its Services are known; look-alike typos still warn.
 func TestClusterEnvNotReportedAsTypo(t *testing.T) {

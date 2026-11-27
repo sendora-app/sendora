@@ -1,6 +1,6 @@
 # Sendora stored-file format and database encryption
 
-Status: normative for Sendora 0.1.5 and later (file format version 2). The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
+Status: normative for Sendora 0.3.0 and later: file format version 2 (written since 0.1.5) with the key hierarchy of section 3 (since 0.3.0). The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 Reference implementation: `internal/filecrypt`. Test vectors: `internal/filecrypt/testdata/vectors.json`, regenerated independently by `docs/tools/verify_vectors.py` (Python `cryptography` package). A change to this document, the code or the vectors that breaks one of the three is a bug.
 
